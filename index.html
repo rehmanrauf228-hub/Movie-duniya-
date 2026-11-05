@@ -11,21 +11,33 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Cabinet+Grotesk:wght@800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   </head>
-  <body style="margin: 0; background-color: #07070a; color: #ffffff; font-family: 'Plus Jakarta Sans', sans-serif;">
+  <body style="margin: 0; background-color: #07070a; color: #ffffff; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;">
     <div id="root">
-      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1c0a0e 0%, #07070a 100%);">
+      <div id="md-initial-loader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1c0a0e 0%, #07070a 100%);">
         <div style="font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: -0.5px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
           <span style="color: #ef4444;">Movie</span><span>Duniya</span>
         </div>
         <div style="width: 36px; height: 36px; border: 3px solid rgba(239,68,68,0.2); border-top-color: #ef4444; border-radius: 50%; animation: mdSpin 0.8s linear infinite;"></div>
-        <p style="margin-top: 16px; font-size: 13px; color: #9ca3af; letter-spacing: 0.5px;">Loading MovieDuniya...</p>
+        <p id="md-loader-status" style="margin-top: 16px; font-size: 13px; color: #9ca3af; letter-spacing: 0.5px; text-align: center;">
+          Loading MovieDuniya...
+        </p>
         <style>
           @keyframes mdSpin { to { transform: rotate(360deg); } }
         </style>
       </div>
     </div>
+    <script>
+      // Fallback Watchdog: If React hasn't mounted in 4.5 seconds, provide instant refresh/clear options
+      setTimeout(function() {
+        var statusEl = document.getElementById('md-loader-status');
+        if (statusEl && document.getElementById('md-initial-loader')) {
+          statusEl.innerHTML = '<span style="color:#ef4444;font-weight:600;">Taking a moment...</span><br><br>' +
+            '<button onclick="localStorage.clear();window.location.reload();" style="background:#dc2626;color:#ffffff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Clear Cache & Refresh</button>';
+        }
+      }, 4500);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

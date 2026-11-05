@@ -27,9 +27,12 @@ export default function App() {
   const [movies, setMovies] = useState<Movie[]>(() => {
     try {
       const saved = localStorage.getItem('movieduniya_movies_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error loading movies from storage:', e);
     }
     return INITIAL_MOVIES;
   });
@@ -46,9 +49,26 @@ export default function App() {
   const [user, setUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('movieduniya_user_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            id: parsed.id || 'usr-sub-01',
+            name: parsed.name || 'Rehman Rauf',
+            email: parsed.email || 'rehmanrauf228@gmail.com',
+            role: parsed.role || 'admin',
+            hasActiveSubscription: parsed.hasActiveSubscription !== undefined ? Boolean(parsed.hasActiveSubscription) : true,
+            subscriptionPlan: parsed.subscriptionPlan || '3 Months Plan (Most Popular)',
+            subscriptionExpiresAt: parsed.subscriptionExpiresAt || new Date(Date.now() + 86400000 * 90).toISOString(),
+            watchlist: Array.isArray(parsed.watchlist) ? parsed.watchlist : ['pun-01', 'pak-01'],
+            continueWatching: parsed.continueWatching && typeof parsed.continueWatching === 'object' ? parsed.continueWatching : {
+              'pun-01': { currentTime: 2400, duration: 8280, updatedAt: new Date().toISOString() }
+            }
+          };
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error loading user from storage:', e);
     }
     return {
       id: 'usr-sub-01',
@@ -81,9 +101,12 @@ export default function App() {
   const [transactions, setTransactions] = useState<PaymentTransaction[]>(() => {
     try {
       const saved = localStorage.getItem('movieduniya_transactions_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error loading transactions from storage:', e);
     }
     return [
       {
