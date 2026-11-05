@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #07070a;
+    color: #ffffff;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom glow and cinematic effects */
+.glow-red {
+  box-shadow: 0 0 35px -5px rgba(229, 9, 20, 0.65), 0 0 15px -2px rgba(229, 9, 20, 0.4);
+}
+
+.glow-red-card {
+  box-shadow: 0 0 30px -4px rgba(239, 68, 68, 0.5), inset 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+.glow-gold {
+  box-shadow: 0 0 25px -4px rgba(245, 158, 11, 0.5);
+}
+
+.glow-text-red {
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 0 40px rgba(239, 68, 68, 0.3);
+}
+
+.glow-text-gold {
+  text-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d0e12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2c35;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e50914;
+}
+
+/* Hide scrollbar for carousel rails while allowing scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

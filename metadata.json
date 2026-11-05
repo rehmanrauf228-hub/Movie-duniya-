@@ -1,0 +1,6 @@
+{
+  "name": "MovieDuniya - Watch, Upload & Enjoy Streaming",
+  "description": "Your ultimate destination for Punjabi, English, Pakistani & Hindi movies and web series with HD streaming, subscriptions, and creator upload system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
