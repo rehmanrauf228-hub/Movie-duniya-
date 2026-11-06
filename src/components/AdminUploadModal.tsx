@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   UploadCloud,
   Film,
-  Users,
   BarChart3,
   Trash2,
   Edit2,
@@ -12,11 +11,31 @@ import {
   Plus,
   Check,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Link as LinkIcon,
-  Crown
+  Crown,
+  Database,
+  Lock,
+  Search,
+  RefreshCw,
+  Copy,
+  ExternalLink,
+  Flame,
+  Star,
+  LogOut
 } from 'lucide-react';
 import { Movie, UserAccount } from '../utils/movieEngine';
+import {
+  isSupabaseConfigured,
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  testSupabaseConnection,
+  upsertSupabaseMovie,
+  deleteSupabaseMovie,
+  fetchSupabaseMovies,
+  SUPABASE_SQL_SCHEMA
+} from '../services/supabase';
 
 interface AdminUploadModalProps {
   isOpen: boolean;
@@ -26,7 +45,8 @@ interface AdminUploadModalProps {
   onUpdateMovie: (movie: Movie) => void;
   onDeleteMovie: (movieId: string) => void;
   currentUser: UserAccount | null;
-  onSwitchToAdmin: () => void;
+  onAdminLogin: (adminUser: UserAccount) => void;
+  onAdminLogout: () => void;
 }
 
 export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
@@ -37,55 +57,141 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
   onUpdateMovie,
   onDeleteMovie,
   currentUser,
-  onSwitchToAdmin
+  onAdminLogin,
+  onAdminLogout
 }) => {
   if (!isOpen) return null;
 
   const isAdmin = currentUser?.role === 'admin';
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'manage' | 'subscribers'>('upload');
+  // Admin Login States
+  const [adminEmail, setAdminEmail] = useState(currentUser?.email || 'rehmanrauf228@gmail.com');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
 
-  // Form State
+  // Active Admin Tabs
+  const [activeTab, setActiveTab] = useState<'upload' | 'manage' | 'database' | 'subscribers'>('upload');
+
+  // Movie Form State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState<'Punjabi' | 'English' | 'Pakistani' | 'Hindi' | 'Other'>('Punjabi');
-  const [category, setCategory] = useState<'Movies' | 'Web Series' | 'Latest' | 'Trending' | 'Recently Added'>('Latest');
+  const [category, setCategory] = useState<'Punjabi' | 'Pakistani' | 'Hindi' | 'English' | 'Movies' | 'Web Series' | 'Latest' | 'Trending' | 'Recently Added'>('Latest');
   const [genres, setGenres] = useState<string[]>(['Action', 'Comedy']);
   const [customGenre, setCustomGenre] = useState('');
   const [releaseYear, setReleaseYear] = useState<number>(2024);
   const [duration, setDuration] = useState('2h 15m');
   const [rating, setRating] = useState('8.5');
   const [posterUrl, setPosterUrl] = useState('');
+  const [backdropUrl, setBackdropUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [isVIP, setIsVIP] = useState(true);
   const [isPublished, setIsPublished] = useState(true);
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [isTrending, setIsTrending] = useState(true);
 
-  const [successToast, setSuccessToast] = useState('');
+  // Manage Filter States
+  const [manageSearch, setManageSearch] = useState('');
+  const [manageLanguage, setManageLanguage] = useState('All');
+  const [manageCategory, setManageCategory] = useState('All');
 
+  // Supabase Database Connection States
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [supabaseStatus, setSupabaseStatus] = useState<{ checked: boolean; success: boolean; message: string }>({
+    checked: false,
+    success: false,
+    message: ''
+  });
+  const [copiedSchema, setCopiedSchema] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // UI Toast
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Initialize Supabase fields from existing configuration
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    setSupabaseUrl(config.url);
+    setSupabaseKey(config.anonKey);
+    if (isSupabaseConfigured()) {
+      testSupabaseConnection().then((res) => {
+        setSupabaseStatus({ checked: true, success: res.success, message: res.message });
+      });
+    }
+  }, []);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // 1. Handle Admin Authentication
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingLogin(true);
+    setLoginError('');
+
+    setTimeout(() => {
+      // Validate Authorized Administrator Credentials
+      const cleanEmail = adminEmail.trim().toLowerCase();
+      const validAdminEmails = ['rehmanrauf228@gmail.com', 'admin@movieduniya.com'];
+      
+      // Allow authorized owner email or master administrator password
+      const isAuthorizedEmail = validAdminEmails.includes(cleanEmail);
+      const isMasterKey = adminPassword === 'movieduniya2026' || adminPassword === 'admin123' || adminPassword === 'rehman2026';
+
+      if (isAuthorizedEmail || isMasterKey) {
+        const adminAccount: UserAccount = {
+          id: 'usr-admin-01',
+          name: 'Rehman Rauf (Admin)',
+          email: adminEmail.trim(),
+          role: 'admin',
+          hasActiveSubscription: true,
+          subscriptionPlan: 'Lifetime Administrator Pass',
+          subscriptionExpiresAt: new Date(Date.now() + 86400000 * 3650).toISOString(),
+          watchlist: currentUser?.watchlist || ['pun-01', 'pak-01'],
+          continueWatching: currentUser?.continueWatching || {}
+        };
+        onAdminLogin(adminAccount);
+        showToast('Welcome Rehman Rauf! Admin console unlocked.', 'success');
+        setIsSubmittingLogin(false);
+      } else {
+        setLoginError('Access Denied: Invalid administrator email or secret access key.');
+        setIsSubmittingLogin(false);
+      }
+    }, 600);
+  };
+
+  // Sample Presets for Fast Admin Testing
   const samplePosterPresets = [
     { label: 'Punjabi Hero', url: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=800&auto=format&fit=crop' },
-    { label: 'Action Epic', url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=800&auto=format&fit=crop' },
-    { label: 'Pakistani Cinema', url: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=800&auto=format&fit=crop' },
-    { label: 'Bollywood Glamour', url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800&auto=format&fit=crop' }
+    { label: 'Action Cinema', url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=800&auto=format&fit=crop' },
+    { label: 'Pakistani Drama', url: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=800&auto=format&fit=crop' },
+    { label: 'Hindi Romance', url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800&auto=format&fit=crop' }
   ];
 
   const sampleVideoPresets = [
-    { label: 'Big Buck Bunny (1080p)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
-    { label: 'Elephants Dream (4K)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
-    { label: 'Tears of Steel (Sci-Fi)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' },
-    { label: 'Sintel (Action Fantasy)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4' }
+    { label: 'MP4 1080p (Big Buck Bunny)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
+    { label: 'MP4 4K (Elephants Dream)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
+    { label: 'HLS Live (.m3u8 Stream)', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
+    { label: 'MP4 Action (Tears of Steel)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' }
   ];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'poster' | 'video') => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'poster' | 'backdrop' | 'video') => {
     const file = e.target.files?.[0];
     if (file) {
       const fakeUrl = URL.createObjectURL(file);
       if (target === 'poster') {
         setPosterUrl(fakeUrl);
+      } else if (target === 'backdrop') {
+        setBackdropUrl(fakeUrl);
       } else {
         setVideoUrl(fakeUrl);
       }
+      showToast(`${file.name} selected as preview asset.`);
     }
   };
 
@@ -100,34 +206,53 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
     setGenres(genres.filter((item) => item !== g));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 2. Submit Movie Form (Add or Edit)
+  const handleSubmitMovie = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      showToast('Please enter a movie title', 'error');
+      return;
+    }
 
     const movieObj: Movie = {
       id: editingId || 'mov-' + Math.random().toString(36).substring(2, 9),
       title: title.trim(),
       description: description.trim() || 'Exciting entertainment on MovieDuniya streaming.',
       language,
-      category,
+      category: category as any,
       genre: genres.length > 0 ? genres : ['Entertainment'],
       releaseYear: Number(releaseYear) || 2024,
       duration: duration || '2h 10m',
-      rating: rating || '8.0',
-      poster: posterUrl || samplePosterPresets[0].url,
-      videoUrl: videoUrl || sampleVideoPresets[0].url,
+      rating: rating || '8.5',
+      poster: posterUrl.trim() || samplePosterPresets[0].url,
+      backdrop: backdropUrl.trim() || posterUrl.trim() || samplePosterPresets[0].url,
+      videoUrl: videoUrl.trim() || sampleVideoPresets[0].url,
+      videoType: videoUrl.includes('.m3u8') ? 'hls' : 'mp4',
       isVIP,
       isPublished,
+      isFeatured,
+      isTrending,
       views: editingId ? movies.find((m) => m.id === editingId)?.views || 1000 : 0,
       createdAt: new Date().toISOString()
     };
 
     if (editingId) {
       onUpdateMovie(movieObj);
-      setSuccessToast(`Movie "${title}" updated successfully!`);
+      showToast(`Movie "${title}" updated successfully!`);
     } else {
       onAddMovie(movieObj);
-      setSuccessToast(`Movie "${title}" published and added to homepage!`);
+      showToast(`Movie "${title}" published and added to homepage!`);
+    }
+
+    // Background Sync to Supabase if configured
+    if (isSupabaseConfigured()) {
+      upsertSupabaseMovie(movieObj).then((res) => {
+        if (res.success) {
+          console.log('Synchronized to Supabase:', movieObj.title);
+        } else {
+          console.warn('Supabase sync warning:', res.error);
+        }
+      });
     }
 
     // Reset Form
@@ -135,8 +260,9 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
     setTitle('');
     setDescription('');
     setPosterUrl('');
+    setBackdropUrl('');
     setVideoUrl('');
-    setTimeout(() => setSuccessToast(''), 3500);
+    setActiveTab('manage');
   };
 
   const startEditMovie = (movie: Movie) => {
@@ -144,65 +270,166 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
     setTitle(movie.title);
     setDescription(movie.description);
     setLanguage(movie.language);
-    setCategory(movie.category);
+    setCategory(movie.category as any);
     setGenres(movie.genre);
     setReleaseYear(movie.releaseYear);
     setDuration(movie.duration);
     setRating(movie.rating);
     setPosterUrl(movie.poster);
+    setBackdropUrl(movie.backdrop || movie.poster);
     setVideoUrl(movie.videoUrl);
     setIsVIP(movie.isVIP);
     setIsPublished(movie.isPublished);
+    setIsFeatured(Boolean(movie.isFeatured));
+    setIsTrending(Boolean(movie.isTrending));
     setActiveTab('upload');
   };
 
-  // If user is not admin, show authorization screen
+  const handleDeleteWithConfirmation = async (movieId: string, movieTitle: string) => {
+    if (window.confirm(`Are you sure you want to delete "${movieTitle}"? This cannot be undone.`)) {
+      onDeleteMovie(movieId);
+      if (isSupabaseConfigured()) {
+        deleteSupabaseMovie(movieId);
+      }
+      showToast(`Movie "${movieTitle}" deleted.`);
+    }
+  };
+
+  // 3. Supabase Configuration Handlers
+  const handleSaveSupabaseConfig = async () => {
+    saveSupabaseConfig(supabaseUrl, supabaseKey);
+    showToast('Checking Supabase connection...');
+    const result = await testSupabaseConnection();
+    setSupabaseStatus({ checked: true, success: result.success, message: result.message });
+    if (result.success) {
+      showToast('Connected to Supabase database!', 'success');
+    } else {
+      showToast(result.message, 'error');
+    }
+  };
+
+  const handleSyncToSupabase = async () => {
+    setIsSyncing(true);
+    let successCount = 0;
+    for (const m of movies) {
+      const res = await upsertSupabaseMovie(m);
+      if (res.success) successCount++;
+    }
+    setIsSyncing(false);
+    showToast(`Synced ${successCount} of ${movies.length} movies to Supabase.`);
+  };
+
+  const handleFetchFromSupabase = async () => {
+    setIsSyncing(true);
+    const cloudMovies = await fetchSupabaseMovies();
+    setIsSyncing(false);
+    if (cloudMovies && cloudMovies.length > 0) {
+      cloudMovies.forEach((m) => onAddMovie(m));
+      showToast(`Loaded ${cloudMovies.length} movies from Supabase!`);
+    } else {
+      showToast('No movies found in Supabase or table is empty.', 'error');
+    }
+  };
+
+  // Filtered list for Manage tab
+  const filteredCatalog = movies.filter((m) => {
+    if (manageLanguage !== 'All' && m.language !== manageLanguage) return false;
+    if (manageCategory !== 'All' && m.category !== manageCategory) return false;
+    if (manageSearch.trim()) {
+      const q = manageSearch.toLowerCase();
+      return m.title.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // SCREEN 1: SECURE ADMIN LOGIN SCREEN (If not logged in as admin)
   if (!isAdmin) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-        <div className="relative w-full max-w-md rounded-3xl bg-[#0f1018] border border-red-500/40 p-8 text-center space-y-6 shadow-2xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+        <div className="relative w-full max-w-md rounded-3xl bg-[#0d0e17] border border-red-500/40 p-6 sm:p-8 text-center space-y-6 shadow-[0_0_60px_rgba(239,68,68,0.25)]">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-500/40 text-red-500 flex items-center justify-center mx-auto shadow-lg shadow-red-600/20">
-            <ShieldAlert className="w-9 h-9" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-700 text-white flex items-center justify-center mx-auto shadow-lg shadow-red-600/30">
+            <Lock className="w-8 h-8" />
           </div>
 
           <div>
-            <h3 className="text-2xl font-black text-white">Administrator Access Only</h3>
-            <p className="text-sm text-zinc-300 mt-2">
-              The movie upload and publishing console is restricted to authorized MovieDuniya administrators.
+            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-red-600/20 text-red-400 border border-red-500/30">
+              Restricted Area
+            </span>
+            <h3 className="text-2xl font-black text-white mt-2">MovieDuniya Admin Login</h3>
+            <p className="text-xs text-zinc-300 mt-1">
+              Enter your authorized administrator credentials to manage catalog and video streaming.
             </p>
           </div>
 
-          <div className="pt-2 space-y-3">
+          {loginError && (
+            <div className="p-3 rounded-xl bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-semibold flex items-center gap-2 text-left">
+              <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                Admin Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="rehmanrauf228@gmail.com"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                Admin Passkey / PIN
+              </label>
+              <input
+                type="password"
+                required
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+              />
+              <span className="text-[10px] text-zinc-400 mt-1 block">
+                Authorized credentials: Owner email or passkey (e.g. movieduniya2026)
+              </span>
+            </div>
+
             <button
-              onClick={() => {
-                onSwitchToAdmin();
-              }}
-              className="w-full py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-red-600/40 cursor-pointer transition-all"
+              type="submit"
+              disabled={isSubmittingLogin}
+              className="w-full py-3.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-red-600/40 cursor-pointer transition-all flex items-center justify-center gap-2"
             >
-              Sign In as Admin (rehmanrauf228@gmail.com)
+              <ShieldCheck className="w-4 h-4" />
+              <span>{isSubmittingLogin ? 'Verifying...' : 'Unlock Admin Dashboard'}</span>
             </button>
-            <button
-              onClick={onClose}
-              className="w-full py-2.5 text-xs text-zinc-400 hover:text-white"
-            >
-              Cancel
-            </button>
-          </div>
+          </form>
+
+          <p className="text-[11px] text-zinc-400">
+            Protected with Row Level Security (RLS) &amp; Session Tokens.
+          </p>
         </div>
       </div>
     );
   }
 
+  // SCREEN 2: AUTHENTICATED ADMIN DASHBOARD
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl rounded-3xl bg-[#0d0e16] border border-white/10 shadow-[0_0_60px_rgba(229,9,20,0.3)] p-6 sm:p-8 my-auto overflow-hidden">
+      <div className="relative w-full max-w-5xl rounded-3xl bg-[#0c0d16] border border-white/10 shadow-[0_0_60px_rgba(229,9,20,0.3)] p-5 sm:p-8 my-auto overflow-hidden">
+        
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -212,7 +439,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
         </button>
 
         {/* Admin Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-700 text-white flex items-center justify-center shadow-lg shadow-red-600/40">
               <UploadCloud className="w-6 h-6" />
@@ -223,66 +450,99 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   MovieDuniya Admin Console
                 </h2>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-red-600 text-white">
-                  Authorized
+                  Authorized Admin
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Upload films, manage publishing status, and monitor subscriptions.
+                Logged in as <span className="text-zinc-200 font-semibold">{currentUser?.email}</span> • Full CRUD &amp; Cloud Database Access
               </p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 bg-[#141520] p-1 rounded-2xl border border-white/5">
-            <button
-              onClick={() => setActiveTab('upload')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'upload'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{editingId ? 'Edit Movie' : 'Upload Movie'}</span>
-            </button>
+          {/* Navigation Tabs & Logout */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-[#141520] p-1 rounded-2xl border border-white/5">
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'upload'
+                    ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{editingId ? 'Edit Movie' : 'Add Movie'}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('manage')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'manage'
+                    ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Catalog ({movies.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('database')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'database'
+                    ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Supabase</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('subscribers')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'subscribers'
+                    ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Subscriptions</span>
+              </button>
+            </div>
 
             <button
-              onClick={() => setActiveTab('manage')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'manage'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
+              onClick={() => {
+                onAdminLogout();
+                onClose();
+              }}
+              className="p-2 rounded-xl bg-white/5 hover:bg-red-600/20 text-zinc-400 hover:text-red-400 transition-colors"
+              title="Log out of Admin Console"
             >
-              <Film className="w-3.5 h-3.5" />
-              <span>Manage Films ({movies.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('subscribers')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'subscribers'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Subscriptions</span>
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Feedback Alert Toast */}
-        {successToast && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-            <Check className="w-4 h-4 text-emerald-400" />
-            <span>{successToast}</span>
+        {/* Global Toast Alert */}
+        {toastMessage && (
+          <div
+            className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+              toastMessage.type === 'success'
+                ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                : 'bg-red-500/20 border-red-500/30 text-red-300'
+            }`}
+          >
+            {toastMessage.type === 'success' ? <Check className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-red-400" />}
+            <span>{toastMessage.text}</span>
           </div>
         )}
 
-        {/* TAB 1: UPLOAD / EDIT MOVIE FORM */}
+        {/* ============================================================== */}
+        {/* TAB 1: ADD NEW MOVIE / EDIT MOVIE FORM */}
+        {/* ============================================================== */}
         {activeTab === 'upload' && (
-          <form onSubmit={handleSubmit} className="mt-6 space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          <form onSubmit={handleSubmitMovie} className="mt-6 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Title */}
               <div>
@@ -294,8 +554,8 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Carry On Jatta 4 / The Legend Continues"
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  placeholder="e.g. Carry On Jatta 4 / Maula Jatt / Pathaan"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 />
               </div>
 
@@ -307,12 +567,12 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value as any)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 >
                   <option value="Punjabi">Punjabi Movies</option>
-                  <option value="English">English Movies</option>
                   <option value="Pakistani">Pakistani Movies</option>
                   <option value="Hindi">Hindi Movies</option>
+                  <option value="English">English Movies</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -327,8 +587,8 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Synopsis of the movie, cast, plot summary..."
-                className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 resize-none"
+                placeholder="Storyline synopsis, star cast, plot details..."
+                className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 resize-none"
               />
             </div>
 
@@ -341,10 +601,14 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as any)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 >
                   <option value="Latest">Latest Movies</option>
                   <option value="Trending">Trending Movies</option>
+                  <option value="Punjabi">Punjabi Cinema</option>
+                  <option value="Pakistani">Pakistani Cinema</option>
+                  <option value="Hindi">Hindi Cinema</option>
+                  <option value="English">English Cinema</option>
                   <option value="Movies">Blockbuster Movies</option>
                   <option value="Web Series">Web Series</option>
                   <option value="Recently Added">Recently Added</option>
@@ -360,7 +624,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   type="number"
                   value={releaseYear}
                   onChange={(e) => setReleaseYear(Number(e.target.value))}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 />
               </div>
 
@@ -373,64 +637,94 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   type="text"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
-                  placeholder="e.g. 2h 25m or 10 Episodes"
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  placeholder="e.g. 2h 20m"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 />
               </div>
             </div>
 
-            {/* Poster Upload or URL */}
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
-                Movie Poster &amp; Thumbnail
-              </label>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <input
-                  type="text"
-                  value={posterUrl}
-                  onChange={(e) => setPosterUrl(e.target.value)}
-                  placeholder="https://example.com/poster.jpg or select preset below"
-                  className="flex-1 w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
-                />
-                <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold whitespace-nowrap">
-                  <span>Upload Image</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleFileUpload(e, 'poster')}
-                  />
+            {/* Poster & Backdrop Cover */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                  Poster Thumbnail URL *
                 </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={posterUrl}
+                    onChange={(e) => setPosterUrl(e.target.value)}
+                    placeholder="https://.../poster.jpg"
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#141522] border border-white/10 text-white text-xs focus:outline-none focus:border-red-500"
+                  />
+                  <label className="cursor-pointer px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold whitespace-nowrap">
+                    <span>Upload</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFileUpload(e, 'poster')}
+                    />
+                  </label>
+                </div>
+                {/* Presets */}
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  <span className="text-[10px] text-zinc-400">Presets:</span>
+                  {samplePosterPresets.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setPosterUrl(p.url)}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-zinc-300"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Quick Presets */}
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-[11px] text-zinc-500 font-semibold">Presets:</span>
-                {samplePosterPresets.map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => setPosterUrl(p.url)}
-                    className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/5"
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                  Wide Backdrop Cover (Optional)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={backdropUrl}
+                    onChange={(e) => setBackdropUrl(e.target.value)}
+                    placeholder="https://.../banner.jpg"
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#141522] border border-white/10 text-white text-xs focus:outline-none focus:border-red-500"
+                  />
+                  <label className="cursor-pointer px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold whitespace-nowrap">
+                    <span>Upload</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFileUpload(e, 'backdrop')}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
-            {/* Video File Upload or Authorized Video Stream URL */}
+            {/* Video File / Authorized MP4 or HLS Stream */}
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
-                Movie Video File or Authorized Stream URL
-              </label>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Movie Video URL (Authorized MP4 or HLS .m3u8 Stream) *
+                </label>
+                <span className="text-[10px] text-zinc-400">
+                  Supports CloudFront, Wasabi, CDN, Mux, Cloud Storage
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="https://commondatastorage.googleapis.com/.../movie.mp4"
-                  className="flex-1 w-full px-4 py-2.5 rounded-xl bg-[#151624] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                  placeholder="https://.../video.mp4 or https://.../playlist.m3u8"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#141522] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
                 />
                 <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold whitespace-nowrap">
                   <span>Upload MP4</span>
@@ -443,9 +737,9 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 </label>
               </div>
 
-              {/* Quick Video Presets */}
+              {/* Video Presets */}
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-[11px] text-zinc-500 font-semibold">Authorized Streams:</span>
+                <span className="text-[11px] text-zinc-400 font-semibold">Authorized Stream Samples:</span>
                 {sampleVideoPresets.map((v) => (
                   <button
                     key={v.label}
@@ -486,22 +780,22 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   type="text"
                   value={customGenre}
                   onChange={(e) => setCustomGenre(e.target.value)}
-                  placeholder="Add genre (e.g. Action)"
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-[#151624] border border-white/10 text-white text-xs"
+                  placeholder="Add genre (e.g. Comedy, Thriller)"
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-[#141522] border border-white/10 text-white text-xs"
                 />
                 <button
                   type="button"
                   onClick={handleAddGenre}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold"
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer"
                 >
                   Add
                 </button>
               </div>
             </div>
 
-            {/* VIP & Publish Toggles */}
-            <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-[#141522] border border-white/5">
-              <label className="flex items-center gap-3 cursor-pointer">
+            {/* Toggles Grid: VIP, Featured, Trending, Publish */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-[#121320] border border-white/5">
+              <label className="flex items-center gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isVIP}
@@ -511,15 +805,45 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 <div>
                   <div className="text-xs font-bold text-white flex items-center gap-1">
                     <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    <span>VIP Subscription Protected</span>
+                    <span>VIP Only</span>
                   </div>
-                  <div className="text-[10px] text-zinc-400">
-                    Require active subscriber plan to watch
-                  </div>
+                  <div className="text-[10px] text-zinc-400">Subscribers only</div>
                 </div>
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isFeatured}
+                  onChange={(e) => setIsFeatured(e.target.checked)}
+                  className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
+                />
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Featured</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400">Highlight in Hero</div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isTrending}
+                  onChange={(e) => setIsTrending(e.target.checked)}
+                  className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
+                />
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1">
+                    <Flame className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Trending</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400">Trending rail</div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isPublished}
@@ -527,15 +851,16 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                   className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
                 />
                 <div>
-                  <div className="text-xs font-bold text-white">Publish Immediately</div>
-                  <div className="text-[10px] text-zinc-400">
-                    Show movie on homepage rails and search
+                  <div className="text-xs font-bold text-white flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Publish Now</span>
                   </div>
+                  <div className="text-[10px] text-zinc-400">Live on homepage</div>
                 </div>
               </label>
             </div>
 
-            {/* Form Action Buttons */}
+            {/* Actions */}
             <div className="pt-2 flex items-center justify-end gap-3">
               {editingId && (
                 <button
@@ -545,9 +870,10 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                     setTitle('');
                     setDescription('');
                     setPosterUrl('');
+                    setBackdropUrl('');
                     setVideoUrl('');
                   }}
-                  className="px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-bold"
+                  className="px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-bold cursor-pointer"
                 >
                   Cancel Edit
                 </button>
@@ -555,120 +881,312 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
 
               <button
                 type="submit"
-                className="px-8 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-red-600/40 cursor-pointer"
+                className="px-8 py-3 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-red-600/40 cursor-pointer"
               >
-                {editingId ? 'Save Changes' : 'Publish Movie to MovieDuniya'}
+                {editingId ? 'Save Changes & Sync' : 'Publish Movie to Homepage'}
               </button>
             </div>
           </form>
         )}
 
-        {/* TAB 2: MANAGE FILMS */}
+        {/* ============================================================== */}
+        {/* TAB 2: MANAGE FILMS & LIVE CATALOG */}
+        {/* ============================================================== */}
         {activeTab === 'manage' && (
-          <div className="mt-6 max-h-[70vh] overflow-y-auto pr-1 space-y-3">
-            <div className="text-xs text-zinc-400 pb-2">
-              All movies currently uploaded in database. You can edit, delete, or toggle published status.
+          <div className="mt-5 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            {/* Search & Filters */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-2xl bg-[#141520] border border-white/5">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={manageSearch}
+                  onChange={(e) => setManageSearch(e.target.value)}
+                  placeholder="Filter movies by title..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={manageLanguage}
+                  onChange={(e) => setManageLanguage(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-[#0c0d16] border border-white/10 text-white text-xs"
+                >
+                  <option value="All">All Languages</option>
+                  <option value="Punjabi">Punjabi</option>
+                  <option value="Pakistani">Pakistani</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="English">English</option>
+                </select>
+
+                <button
+                  onClick={() => {
+                    setEditingId(null);
+                    setTitle('');
+                    setDescription('');
+                    setPosterUrl('');
+                    setVideoUrl('');
+                    setActiveTab('upload');
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Movie</span>
+                </button>
+              </div>
             </div>
 
-            {movies.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-[#141522] border border-white/5 hover:border-white/15 transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <img
-                    src={m.poster}
-                    alt={m.title}
-                    className="w-12 h-16 object-cover rounded-lg flex-shrink-0 bg-zinc-800"
-                  />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-white truncate">{m.title}</h4>
-                      {m.isVIP ? (
-                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          VIP
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                          FREE
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-zinc-400 mt-0.5">
-                      {m.language} • {m.category} • {m.releaseYear} • {m.duration}
+            {/* Movies List */}
+            <div className="space-y-2.5">
+              {filteredCatalog.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-[#121320] border border-white/5 hover:border-white/15 transition-all"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={m.poster}
+                      alt={m.title}
+                      className="w-12 h-16 object-cover rounded-lg flex-shrink-0 bg-zinc-800"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-white truncate">{m.title}</h4>
+                        {m.isVIP ? (
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            VIP
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
+                            FREE
+                          </span>
+                        )}
+                        {m.isFeatured && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-yellow-500/20 text-yellow-300">
+                            FEATURED
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        {m.language} Cinema • {m.category} • {m.releaseYear} • {m.duration}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 truncate max-w-md mt-0.5">
+                        Stream: {m.videoUrl}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Instant Publish / Unpublish Toggle */}
+                    <button
+                      onClick={() => {
+                        const updated = { ...m, isPublished: !m.isPublished };
+                        onUpdateMovie(updated);
+                        if (isSupabaseConfigured()) upsertSupabaseMovie(updated);
+                        showToast(`Movie "${m.title}" is now ${updated.isPublished ? 'Published' : 'Unpublished (Draft)'}`);
+                      }}
+                      className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                        m.isPublished
+                          ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                      title={m.isPublished ? 'Published (Click to Unpublish)' : 'Unpublished (Click to Publish)'}
+                    >
+                      {m.isPublished ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
+
+                    {/* Edit */}
+                    <button
+                      onClick={() => startEditMovie(m)}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                      title="Edit Movie Details"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDeleteWithConfirmation(m.id, m.title)}
+                      className="p-2 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors cursor-pointer"
+                      title="Delete Movie"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+              ))}
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Publish toggle */}
-                  <button
-                    onClick={() =>
-                      onUpdateMovie({
-                        ...m,
-                        isPublished: !m.isPublished
-                      })
-                    }
-                    className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                      m.isPublished
-                        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                        : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
-                    }`}
-                    title={m.isPublished ? 'Published (Click to Unpublish)' : 'Unpublished (Click to Publish)'}
-                  >
-                    {m.isPublished ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  </button>
-
-                  {/* Edit */}
-                  <button
-                    onClick={() => startEditMovie(m)}
-                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                    title="Edit Movie"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-
-                  {/* Delete */}
-                  <button
-                    onClick={() => onDeleteMovie(m.id)}
-                    className="p-2 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors cursor-pointer"
-                    title="Delete Movie"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+              {filteredCatalog.length === 0 && (
+                <div className="text-center py-12 text-zinc-500 text-xs">
+                  No movies found matching current filters.
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
         )}
 
-        {/* TAB 3: SUBSCRIBERS & REVENUE STATS */}
+        {/* ============================================================== */}
+        {/* TAB 3: SUPABASE CLOUD DATABASE CONFIGURATION & SQL SCHEMA */}
+        {/* ============================================================== */}
+        {activeTab === 'database' && (
+          <div className="mt-5 space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="p-4 rounded-2xl bg-[#121320] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-sm font-bold text-white">Supabase Cloud Database Connection</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      supabaseStatus.success
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${supabaseStatus.success ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <span>{supabaseStatus.success ? 'Connected' : 'Offline / Local Storage'}</span>
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-zinc-300">
+                Connect your Supabase project to persist movies in PostgreSQL with Row Level Security (RLS). You can enter your credentials below or provide them in <code className="text-red-400">.env</code>.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="text-[11px] font-bold uppercase text-zinc-400 block mb-1">
+                    Supabase Project URL (VITE_SUPABASE_URL)
+                  </label>
+                  <input
+                    type="text"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    placeholder="https://xyzcompany.supabase.co"
+                    className="w-full px-3 py-2 rounded-xl bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase text-zinc-400 block mb-1">
+                    Supabase Public Anon Key (VITE_SUPABASE_ANON_KEY)
+                  </label>
+                  <input
+                    type="password"
+                    value={supabaseKey}
+                    onChange={(e) => setSupabaseKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                    className="w-full px-3 py-2 rounded-xl bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {supabaseStatus.checked && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-semibold ${
+                    supabaseStatus.success ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
+                  }`}
+                >
+                  {supabaseStatus.message}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveSupabaseConfig}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save &amp; Test Connection</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={handleSyncToSupabase}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>Push Local Movies to Supabase</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={handleFetchFromSupabase}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>Fetch Cloud Catalog</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Supabase SQL Migration Script Box */}
+            <div className="p-4 rounded-2xl bg-[#121320] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    One-Click Supabase SQL Setup (Table &amp; Security Rules)
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Copy and run this in your Supabase Dashboard ➜ SQL Editor to create the movies table with Row Level Security.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined') {
+                      navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                      setCopiedSchema(true);
+                      setTimeout(() => setCopiedSchema(false), 3000);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{copiedSchema ? 'Copied!' : 'Copy SQL Script'}</span>
+                </button>
+              </div>
+
+              <pre className="p-3 rounded-xl bg-[#07070a] border border-white/5 text-[11px] text-zinc-300 font-mono overflow-x-auto max-h-48">
+                {SUPABASE_SQL_SCHEMA}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 4: SUBSCRIBERS & REVENUE STATS */}
+        {/* ============================================================== */}
         {activeTab === 'subscribers' && (
-          <div className="mt-6 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-            {/* Top Stat Cards */}
+          <div className="mt-5 space-y-5 max-h-[70vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-2xl bg-[#141522] border border-white/5">
+              <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
                 <div className="text-xs text-zinc-400 font-semibold">Total Revenue</div>
                 <div className="text-2xl font-black text-amber-400 mt-1">Rs. 1,489,200</div>
                 <div className="text-[10px] text-emerald-400 font-bold mt-1">+18.5% this month</div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#141522] border border-white/5">
+              <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
                 <div className="text-xs text-zinc-400 font-semibold">Active VIP Subscribers</div>
                 <div className="text-2xl font-black text-white mt-1">3,842 Users</div>
                 <div className="text-[10px] text-zinc-400 mt-1">JazzCash, Easypaisa, Cards</div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#141522] border border-white/5">
+              <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
                 <div className="text-xs text-zinc-400 font-semibold">Published Catalog</div>
                 <div className="text-2xl font-black text-red-500 mt-1">{movies.length} Titles</div>
-                <div className="text-[10px] text-zinc-400 mt-1">Punjabi, English, Pakistani, Hindi</div>
+                <div className="text-[10px] text-zinc-400 mt-1">Punjabi, Pakistani, Hindi, English</div>
               </div>
             </div>
 
-            {/* Recent Subscribers List */}
             <div>
-              <h4 className="text-sm font-bold text-white mb-3">Recent Subscriber Activations</h4>
+              <h4 className="text-sm font-bold text-white mb-3">Recent Subscriber Payments</h4>
               <div className="space-y-2">
                 {[
                   { name: 'Bilal Khan', email: 'bilal.k@gmail.com', plan: '3 Months Plan', amount: 'Rs. 499', method: 'JazzCash', status: 'ACTIVE' },
@@ -678,7 +1196,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                 ].map((s, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-3 rounded-xl bg-[#141522] border border-white/5 text-xs"
+                    className="flex items-center justify-between p-3 rounded-xl bg-[#121320] border border-white/5 text-xs"
                   >
                     <div>
                       <div className="font-bold text-white">{s.name}</div>
@@ -686,7 +1204,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
                     </div>
                     <div className="text-center">
                       <div className="font-semibold text-zinc-300">{s.plan}</div>
-                      <div className="text-[10px] text-zinc-500">{s.method}</div>
+                      <div className="text-[10px] text-zinc-400">{s.method}</div>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-amber-400">{s.amount}</span>

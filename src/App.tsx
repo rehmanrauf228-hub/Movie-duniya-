@@ -21,6 +21,7 @@ import {
   SUBSCRIPTION_PLANS,
   PaymentTransaction
 } from './utils/movieEngine';
+import { isSupabaseConfigured, fetchSupabaseMovies } from './services/supabase';
 
 export default function App() {
   // 1. Movies State with LocalStorage Persistence
@@ -42,6 +43,29 @@ export default function App() {
       localStorage.setItem('movieduniya_movies_v2', JSON.stringify(movies));
     } catch (e) {
       console.error(e);
+    }
+  }, [movies]);
+
+  // Sync from Supabase Cloud on mount if connected
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      fetchSupabaseMovies().then((cloudMovies) => {
+        if (cloudMovies && cloudMovies.length > 0) {
+          setMovies(cloudMovies);
+        }
+      }).catch((err) => console.warn('Supabase fetch bypassed:', err));
+    }
+  }, []);
+
+  // Auto-open movie player if URL contains ?watch=movieId
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const watchId = params.get('watch');
+      if (watchId) {
+        const found = movies.find((m) => m.id === watchId);
+        if (found) setActiveMovie(found);
+      }
     }
   }, [movies]);
 
@@ -398,9 +422,12 @@ export default function App() {
         <MoviePlayerModal
           movie={activeMovie}
           user={user}
+          allMovies={movies}
+          onSelectMovie={(m) => setActiveMovie(m)}
           onClose={() => setActiveMovie(null)}
           onOpenSubscribe={handleOpenSubscribe}
           onUpdateContinueWatching={handleUpdateContinueWatching}
+          onToggleWatchlist={handleToggleWatchlist}
           initialTime={user?.continueWatching[activeMovie.id]?.currentTime || 0}
         />
       )}
@@ -424,7 +451,12 @@ export default function App() {
         onUpdateMovie={handleUpdateMovie}
         onDeleteMovie={handleDeleteMovie}
         currentUser={user}
-        onSwitchToAdmin={() => handleSwitchAccountType('admin')}
+        onAdminLogin={(adminAcc) => setUser(adminAcc)}
+        onAdminLogout={() => {
+          if (user) {
+            setUser({ ...user, role: 'user' });
+          }
+        }}
       />
 
       {/* 11. User Account Modal */}

@@ -13,6 +13,9 @@ export interface Movie {
   rating: string;
   isVIP: boolean;
   isPublished: boolean;
+  isFeatured?: boolean;
+  isTrending?: boolean;
+  videoType?: 'mp4' | 'hls' | 'auto';
   views: number;
   createdAt: string;
 }
