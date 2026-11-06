@@ -92,6 +92,29 @@ export interface PaymentTransaction {
   expiresAt: string;
 }
 
+export interface PaymentAccountSettings {
+  jazzcashNumber: string;
+  jazzcashTitle: string;
+  easypaisaNumber: string;
+  easypaisaTitle: string;
+  bankName: string;
+  bankTitle: string;
+  bankIban: string;
+  instructionsUrdu: string;
+  updatedAt?: string;
+}
+
+export const DEFAULT_PAYMENT_ACCOUNTS: PaymentAccountSettings = {
+  jazzcashNumber: '03001234567',
+  jazzcashTitle: 'Rehman Rauf',
+  easypaisaNumber: '03451234567',
+  easypaisaTitle: 'Rehman Rauf',
+  bankName: 'Meezan Bank Limited',
+  bankTitle: 'Rehman Rauf',
+  bankIban: 'PK36MEZN00012345678901',
+  instructionsUrdu: 'براہ کرم پیسے بھیجنے کے بعد ٹرانزیکشن ID (TID) یہاں درج کریں تاکہ ایڈمن فوری تصدیق کر سکے۔'
+};
+
 export interface UserAccount {
   id: string;
   name: string;

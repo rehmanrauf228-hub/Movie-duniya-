@@ -27,9 +27,18 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Smartphone,
+  Building,
+  CreditCard
 } from 'lucide-react';
-import { Movie, UserAccount, PaymentTransaction } from '../utils/movieEngine';
+import {
+  Movie,
+  UserAccount,
+  PaymentTransaction,
+  PaymentAccountSettings,
+  DEFAULT_PAYMENT_ACCOUNTS
+} from '../utils/movieEngine';
 import {
   isSupabaseConfigured,
   getSupabaseConfig,
@@ -61,6 +70,8 @@ interface AdminUploadModalProps {
   transactions?: PaymentTransaction[];
   onApproveTransaction?: (txId: string) => void;
   onRejectTransaction?: (txId: string) => void;
+  paymentSettings?: PaymentAccountSettings;
+  onSavePaymentSettings?: (settings: PaymentAccountSettings) => Promise<void>;
 }
 
 export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
@@ -75,7 +86,9 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
   onAdminLogout,
   transactions = [],
   onApproveTransaction,
-  onRejectTransaction
+  onRejectTransaction,
+  paymentSettings = DEFAULT_PAYMENT_ACCOUNTS,
+  onSavePaymentSettings
 }) => {
   if (!isOpen) return null;
 
@@ -127,6 +140,27 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
 
   // UI Toast
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Payment Receiving Accounts Configuration
+  const [payAccounts, setPayAccounts] = useState<PaymentAccountSettings>(paymentSettings);
+  const [isSavingPayAccounts, setIsSavingPayAccounts] = useState(false);
+
+  useEffect(() => {
+    setPayAccounts(paymentSettings);
+  }, [paymentSettings]);
+
+  const handleSaveAccounts = async () => {
+    if (!onSavePaymentSettings) return;
+    setIsSavingPayAccounts(true);
+    try {
+      await onSavePaymentSettings(payAccounts);
+      showToast('Payment accounts saved to Firebase Firestore successfully!', 'success');
+    } catch (e) {
+      showToast('Failed to save payment accounts.', 'error');
+    } finally {
+      setIsSavingPayAccounts(false);
+    }
+  };
 
   // Initialize Supabase fields from existing configuration
   useEffect(() => {
@@ -1199,6 +1233,133 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
         {activeTab === 'subscribers' && (
           <div className="mt-5 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
             
+            {/* 0. Payment Receiving Accounts Setup */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#121320] border border-white/10 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-red-600/20 text-red-400 flex items-center justify-center">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">
+                      Your Payment Receiving Accounts (ادائیگی وصول کرنے کے اکاؤنٹس)
+                    </h4>
+                    <p className="text-[11px] text-zinc-400">
+                      یہاں درج کردہ JazzCash اور Easypaisa نمبرز گاہک کو سبسکرپشن خریدتے وقت نظر آئیں گے۔
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isSavingPayAccounts}
+                  onClick={handleSaveAccounts}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer self-start sm:self-auto transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isSavingPayAccounts ? 'Saving...' : 'Save to Firebase'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* JazzCash */}
+                <div className="p-3.5 rounded-xl bg-black/40 border border-amber-500/20 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-400">
+                    <Smartphone className="w-4 h-4 text-amber-400" />
+                    <span>JazzCash Receiving Account</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">Account Number / Phone</label>
+                    <input
+                      type="text"
+                      value={payAccounts.jazzcashNumber}
+                      onChange={(e) => setPayAccounts({ ...payAccounts, jazzcashNumber: e.target.value })}
+                      placeholder="03001234567"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">Account Title (نام)</label>
+                    <input
+                      type="text"
+                      value={payAccounts.jazzcashTitle}
+                      onChange={(e) => setPayAccounts({ ...payAccounts, jazzcashTitle: e.target.value })}
+                      placeholder="Rehman Rauf"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Easypaisa */}
+                <div className="p-3.5 rounded-xl bg-black/40 border border-emerald-500/20 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-emerald-400">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span>Easypaisa Receiving Account</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">Account Number / Phone</label>
+                    <input
+                      type="text"
+                      value={payAccounts.easypaisaNumber}
+                      onChange={(e) => setPayAccounts({ ...payAccounts, easypaisaNumber: e.target.value })}
+                      placeholder="03451234567"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">Account Title (نام)</label>
+                    <input
+                      type="text"
+                      value={payAccounts.easypaisaTitle}
+                      onChange={(e) => setPayAccounts({ ...payAccounts, easypaisaTitle: e.target.value })}
+                      placeholder="Rehman Rauf"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Bank Account */}
+                <div className="p-3.5 rounded-xl bg-black/40 border border-purple-500/20 space-y-2 md:col-span-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-purple-400">
+                    <Building className="w-4 h-4 text-purple-400" />
+                    <span>Bank Transfer Details (Optional)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">Bank Name</label>
+                      <input
+                        type="text"
+                        value={payAccounts.bankName}
+                        onChange={(e) => setPayAccounts({ ...payAccounts, bankName: e.target.value })}
+                        placeholder="Meezan Bank Limited"
+                        className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">Account Title</label>
+                      <input
+                        type="text"
+                        value={payAccounts.bankTitle}
+                        onChange={(e) => setPayAccounts({ ...payAccounts, bankTitle: e.target.value })}
+                        placeholder="Rehman Rauf"
+                        className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">IBAN / Account Number</label>
+                      <input
+                        type="text"
+                        value={payAccounts.bankIban}
+                        onChange={(e) => setPayAccounts({ ...payAccounts, bankIban: e.target.value })}
+                        placeholder="PK36MEZN..."
+                        className="w-full px-3 py-2 rounded-lg bg-[#0c0d16] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* 1. Pending Verifications Queue (Crucial User Requirement) */}
             {(() => {
               const pendingTxs = transactions.filter((t) => t.status === 'PENDING');

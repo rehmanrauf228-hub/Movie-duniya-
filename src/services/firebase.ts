@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Movie, UserAccount, PaymentTransaction } from '../utils/movieEngine';
+import { Movie, UserAccount, PaymentTransaction, PaymentAccountSettings } from '../utils/movieEngine';
 
 // 1. Initialize Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -180,6 +180,53 @@ export async function saveTransactionToFirestore(tx: PaymentTransaction): Promis
   } catch (err: any) {
     const info = handleFirestoreError(err, OperationType.WRITE, path);
     return { success: false, error: info.error };
+  }
+}
+
+export async function fetchTransactionsFromFirestore(): Promise<PaymentTransaction[] | null> {
+  const path = 'transactions';
+  try {
+    const q = query(collection(db, path), orderBy('paidAt', 'desc'));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+
+    const list: PaymentTransaction[] = [];
+    snapshot.forEach((d) => {
+      list.push(d.data() as PaymentTransaction);
+    });
+    return list;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, path);
+    return null;
+  }
+}
+
+// 8.1 Payment Account Settings Persistence
+export async function savePaymentSettingsToFirestore(settings: PaymentAccountSettings): Promise<{ success: boolean; error?: string }> {
+  const path = 'settings/payment_accounts';
+  try {
+    await setDoc(doc(db, 'settings', 'payment_accounts'), {
+      ...settings,
+      updatedAt: new Date().toISOString()
+    });
+    return { success: true };
+  } catch (err: any) {
+    const info = handleFirestoreError(err, OperationType.WRITE, path);
+    return { success: false, error: info.error };
+  }
+}
+
+export async function fetchPaymentSettingsFromFirestore(): Promise<PaymentAccountSettings | null> {
+  const path = 'settings/payment_accounts';
+  try {
+    const snapshot = await getDoc(doc(db, 'settings', 'payment_accounts'));
+    if (snapshot.exists()) {
+      return snapshot.data() as PaymentAccountSettings;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+    return null;
   }
 }
 

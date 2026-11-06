@@ -11,13 +11,17 @@ import {
   Smartphone,
   AlertCircle,
   Download,
-  Loader2
+  Loader2,
+  Copy,
+  Check
 } from 'lucide-react';
 import {
   SubscriptionPlan,
   SUBSCRIPTION_PLANS,
   verifyPaymentTransaction,
-  PaymentTransaction
+  PaymentTransaction,
+  PaymentAccountSettings,
+  DEFAULT_PAYMENT_ACCOUNTS
 } from '../utils/movieEngine';
 
 interface PaymentCheckoutModalProps {
@@ -27,6 +31,7 @@ interface PaymentCheckoutModalProps {
   onSelectPlan: (plan: SubscriptionPlan) => void;
   onPaymentSuccess: (transaction: PaymentTransaction) => void;
   userEmail: string;
+  paymentSettings?: PaymentAccountSettings;
 }
 
 export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
@@ -35,12 +40,15 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   selectedPlan,
   onSelectPlan,
   onPaymentSuccess,
-  userEmail
+  userEmail,
+  paymentSettings = DEFAULT_PAYMENT_ACCOUNTS
 }) => {
   if (!isOpen) return null;
 
   const [gateway, setGateway] = useState<'jazzcash' | 'easypaisa' | 'card' | 'bank'>('jazzcash');
   const [phoneNumber, setPhoneNumber] = useState('03001234567');
+  const [senderTid, setSenderTid] = useState('');
+  const [copiedText, setCopiedText] = useState<string | null>(null);
   const [cnicDigits, setCnicDigits] = useState('42101-1234567-1');
   const [cardNumber, setCardNumber] = useState('4111 2222 3333 4444');
   const [cardExpiry, setCardExpiry] = useState('08/28');
@@ -84,7 +92,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
           currency: selectedPlan.currency,
           gateway,
           accountReference: accountRef,
-          transactionRef: res.transactionRef,
+          transactionRef: senderTid.trim().toUpperCase() || res.transactionRef,
           status: 'PENDING', // Awaiting Admin Verification per user instruction
           paidAt,
           expiresAt: expiryDate.toISOString()
@@ -284,27 +292,87 @@ Watch • Upload • Enjoy
             </div>
 
             {/* Dynamic Gateway Inputs */}
-            <div className="p-4 rounded-2xl bg-[#161722] border border-white/5 space-y-3">
+            <div className="p-4 rounded-2xl bg-[#161722] border border-white/5 space-y-3.5">
               {(gateway === 'jazzcash' || gateway === 'easypaisa') && (
-                <div>
-                  <label className="text-xs font-semibold text-zinc-300 block mb-1">
-                    {gateway === 'jazzcash' ? 'JazzCash Mobile Account Number' : 'Easypaisa Account Number'}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="e.g. 03001234567"
-                      className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-500">
-                      PK (+92)
-                    </span>
+                <div className="space-y-3">
+                  {/* Official Receiver Account Banner */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/5 border border-amber-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                        Official {gateway === 'jazzcash' ? 'JazzCash' : 'Easypaisa'} Receiver Account:
+                      </span>
+                      <span className="text-[11px] text-zinc-300 font-medium">
+                        Title: <strong className="text-white font-bold">{gateway === 'jazzcash' ? paymentSettings.jazzcashTitle : paymentSettings.easypaisaTitle}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-black/60 px-3 py-2 rounded-lg border border-amber-500/20">
+                      <span className="font-mono text-sm sm:text-base font-black text-amber-300 tracking-wider">
+                        {gateway === 'jazzcash' ? paymentSettings.jazzcashNumber : paymentSettings.easypaisaNumber}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const num = gateway === 'jazzcash' ? paymentSettings.jazzcashNumber : paymentSettings.easypaisaNumber;
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(num);
+                            setCopiedText(num);
+                            setTimeout(() => setCopiedText(null), 2500);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black text-xs font-black flex items-center gap-1 cursor-pointer transition-all"
+                      >
+                        {copiedText === (gateway === 'jazzcash' ? paymentSettings.jazzcashNumber : paymentSettings.easypaisaNumber) ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Number</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-amber-300/80 leading-normal">
+                      پہلے اپنے {gateway === 'jazzcash' ? 'JazzCash' : 'Easypaisa'} ایپ سے اس نمبر پر رقم بھیجیں، پھر نیچے اپنا نمبر اور حاصل شدہ TID درج کریں۔
+                    </p>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-1.5 flex items-center gap-1">
+
+                  {/* Customer Sender Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                        Your Sender Phone Number (آپ کا نمبر)
+                      </label>
+                      <input
+                        type="text"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="e.g. 03011234567"
+                        className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                        Transaction ID / TID (Proof from SMS)
+                      </label>
+                      <input
+                        type="text"
+                        value={senderTid}
+                        onChange={(e) => setSenderTid(e.target.value)}
+                        placeholder="e.g. 19284719284"
+                        className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 font-mono uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    You will receive an automated MPIN authorization prompt on your phone.
+                    After submission, Admin verifies this TID against their account and activates your streaming!
                   </p>
                 </div>
               )}
@@ -355,32 +423,77 @@ Watch • Upload • Enjoy
 
               {gateway === 'bank' && (
                 <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-300 block mb-1">
-                      Beneficiary Bank
-                    </label>
-                    <select
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
-                    >
-                      <option value="Meezan Bank Limited">Meezan Bank Limited</option>
-                      <option value="Habib Bank Limited (HBL)">Habib Bank Limited (HBL)</option>
-                      <option value="Bank Alfalah">Bank Alfalah</option>
-                      <option value="Standard Chartered Pakistan">Standard Chartered Pakistan</option>
-                      <option value="Allied Bank Limited">Allied Bank Limited</option>
-                    </select>
+                  {/* Official Bank Account Details */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-400">
+                        Official Bank Account:
+                      </span>
+                      <span className="text-[11px] text-zinc-300 font-medium">
+                        {paymentSettings.bankName}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-zinc-300">
+                      Account Title: <strong className="text-white">{paymentSettings.bankTitle}</strong>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-black/60 px-3 py-2 rounded-lg border border-purple-500/20">
+                      <span className="font-mono text-xs sm:text-sm font-black text-purple-300 truncate mr-2">
+                        {paymentSettings.bankIban}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(paymentSettings.bankIban);
+                            setCopiedText(paymentSettings.bankIban);
+                            setTimeout(() => setCopiedText(null), 2500);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-black flex items-center gap-1 cursor-pointer transition-all flex-shrink-0"
+                      >
+                        {copiedText === paymentSettings.bankIban ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy IBAN</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-300 block mb-1">
-                      Account / IBAN Number
-                    </label>
-                    <input
-                      type="text"
-                      value={bankAccount}
-                      onChange={(e) => setBankAccount(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 font-mono"
-                    />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                        Your Sender Bank / Account
+                      </label>
+                      <input
+                        type="text"
+                        value={bankAccount}
+                        onChange={(e) => setBankAccount(e.target.value)}
+                        placeholder="e.g. HBL (03001234567)"
+                        className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-zinc-300 block mb-1">
+                        Bank Transaction Ref / Cheque No
+                      </label>
+                      <input
+                        type="text"
+                        value={senderTid}
+                        onChange={(e) => setSenderTid(e.target.value)}
+                        placeholder="e.g. BNK-82910"
+                        className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 font-mono uppercase"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

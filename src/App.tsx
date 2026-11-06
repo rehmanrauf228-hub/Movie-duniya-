@@ -19,7 +19,9 @@ import {
   UserAccount,
   SubscriptionPlan,
   SUBSCRIPTION_PLANS,
-  PaymentTransaction
+  PaymentTransaction,
+  PaymentAccountSettings,
+  DEFAULT_PAYMENT_ACCOUNTS
 } from './utils/movieEngine';
 import { isSupabaseConfigured, fetchSupabaseMovies } from './services/supabase';
 import {
@@ -27,7 +29,10 @@ import {
   saveMovieToFirestore,
   deleteMovieFromFirestore,
   saveTransactionToFirestore,
+  fetchTransactionsFromFirestore,
   saveUserProfileToFirestore,
+  savePaymentSettingsToFirestore,
+  fetchPaymentSettingsFromFirestore,
   logoutFirebaseAuth,
   auth
 } from './services/firebase';
@@ -184,6 +189,46 @@ export default function App() {
       console.error(e);
     }
   }, [transactions]);
+
+  // 3.1 Payment Receiving Account Settings (Configured by Admin)
+  const [paymentSettings, setPaymentSettings] = useState<PaymentAccountSettings>(() => {
+    try {
+      const saved = localStorage.getItem('movieduniya_payment_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_PAYMENT_ACCOUNTS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('movieduniya_payment_settings', JSON.stringify(paymentSettings));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [paymentSettings]);
+
+  // Sync payment settings & cloud transactions from Firestore on startup
+  useEffect(() => {
+    fetchPaymentSettingsFromFirestore().then((cloudSettings) => {
+      if (cloudSettings) setPaymentSettings(cloudSettings);
+    }).catch(() => {});
+
+    fetchTransactionsFromFirestore().then((cloudTxs) => {
+      if (cloudTxs && cloudTxs.length > 0) {
+        setTransactions(cloudTxs);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSavePaymentSettings = async (newSettings: PaymentAccountSettings) => {
+    setPaymentSettings(newSettings);
+    await savePaymentSettingsToFirestore(newSettings);
+  };
 
   // 4. Navigation & Filter States
   const [activeTab, setActiveTab] = useState<'home' | 'movies' | 'series'>('home');
@@ -563,9 +608,10 @@ export default function App() {
         onSelectPlan={(plan) => setSelectedPlan(plan)}
         onPaymentSuccess={handlePaymentSuccess}
         userEmail={user?.email || 'user@movieduniya.com'}
+        paymentSettings={paymentSettings}
       />
 
-      {/* 10. Admin Movie Upload & Subscription Approvals Modal */}
+      {/* 10. Admin Movie Upload, Payment Accounts & Subscription Approvals Modal */}
       <AdminUploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -583,6 +629,8 @@ export default function App() {
         transactions={transactions}
         onApproveTransaction={handleApproveTransaction}
         onRejectTransaction={handleRejectTransaction}
+        paymentSettings={paymentSettings}
+        onSavePaymentSettings={handleSavePaymentSettings}
       />
 
       {/* 11. User Account Modal */}
