@@ -95,33 +95,44 @@ test('canUserWatchMovie respects VIP and subscription rules', () => {
   const freeMovie = mockMovies[1];
   const vipMovie = mockMovies[0];
 
-  // Anyone can watch free movie
-  assert.equal(canUserWatchMovie(null, freeMovie).canWatch, true);
-
-  // Guest cannot watch VIP movie
+  // Guest without account cannot watch
+  assert.equal(canUserWatchMovie(null, freeMovie).canWatch, false);
+  assert.equal(canUserWatchMovie(null, freeMovie).reason, 'LOGIN_REQUIRED');
   assert.equal(canUserWatchMovie(null, vipMovie).canWatch, false);
 
-  // Unsubscribed user cannot watch VIP movie
+  // Unsubscribed user cannot watch
   const normalUser: UserAccount = {
     id: 'u1',
     name: 'Ali',
     email: 'ali@example.com',
     role: 'user',
     hasActiveSubscription: false,
+    subscriptionStatus: 'NONE',
     watchlist: [],
     continueWatching: {}
   };
   assert.equal(canUserWatchMovie(normalUser, vipMovie).canWatch, false);
+  assert.equal(canUserWatchMovie(normalUser, vipMovie).reason, 'SUBSCRIPTION_REQUIRED');
 
-  // Active subscriber can watch VIP movie
+  // Pending verification user cannot watch until admin approves
+  const pendingUser: UserAccount = {
+    ...normalUser,
+    subscriptionStatus: 'PENDING_APPROVAL',
+    pendingTransactionRef: 'MD-JC-123456'
+  };
+  assert.equal(canUserWatchMovie(pendingUser, vipMovie).canWatch, false);
+  assert.equal(canUserWatchMovie(pendingUser, vipMovie).reason, 'PENDING_VERIFICATION');
+
+  // Active verified subscriber can watch
   const activeUser: UserAccount = {
     ...normalUser,
     hasActiveSubscription: true,
+    subscriptionStatus: 'ACTIVE',
     subscriptionExpiresAt: new Date(Date.now() + 86400000 * 30).toISOString()
   };
   assert.equal(canUserWatchMovie(activeUser, vipMovie).canWatch, true);
 
-  // Admin can always watch VIP movie
+  // Admin can always watch all movies
   const adminUser: UserAccount = {
     ...normalUser,
     role: 'admin'

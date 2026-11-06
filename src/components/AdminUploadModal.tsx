@@ -23,9 +23,13 @@ import {
   ExternalLink,
   Flame,
   Star,
-  LogOut
+  LogOut,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
-import { Movie, UserAccount } from '../utils/movieEngine';
+import { Movie, UserAccount, PaymentTransaction } from '../utils/movieEngine';
 import {
   isSupabaseConfigured,
   getSupabaseConfig,
@@ -54,6 +58,9 @@ interface AdminUploadModalProps {
   currentUser: UserAccount | null;
   onAdminLogin: (adminUser: UserAccount) => void;
   onAdminLogout: () => void;
+  transactions?: PaymentTransaction[];
+  onApproveTransaction?: (txId: string) => void;
+  onRejectTransaction?: (txId: string) => void;
 }
 
 export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
@@ -65,7 +72,10 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
   onDeleteMovie,
   currentUser,
   onAdminLogin,
-  onAdminLogout
+  onAdminLogout,
+  transactions = [],
+  onApproveTransaction,
+  onRejectTransaction
 }) => {
   if (!isOpen) return null;
 
@@ -1184,61 +1194,194 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: SUBSCRIBERS & REVENUE STATS */}
+        {/* TAB 4: SUBSCRIBERS & PAYMENT VERIFICATIONS */}
         {/* ============================================================== */}
         {activeTab === 'subscribers' && (
-          <div className="mt-5 space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="mt-5 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+            
+            {/* 1. Pending Verifications Queue (Crucial User Requirement) */}
+            {(() => {
+              const pendingTxs = transactions.filter((t) => t.status === 'PENDING');
+              return (
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#141524] border border-amber-500/40 shadow-lg shadow-amber-500/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                        <Clock className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-white flex items-center gap-2">
+                          <span>Pending Payment Verifications</span>
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-black">
+                            {pendingTxs.length} Pending
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-amber-300/80">
+                          صارفین کی جمع کروائی گئی ادائیگیاں • تصدیق کے بعد مووی اسٹریمنگ چالو ہوگی
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {pendingTxs.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-zinc-400 bg-black/30 rounded-xl border border-white/5">
+                      ✓ No pending payments. All consumer payments are currently verified!
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingTxs.map((tx) => (
+                        <div
+                          key={tx.id}
+                          className="p-3.5 sm:p-4 rounded-xl bg-black/40 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-black text-white">{tx.userEmail}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
+                                {tx.gateway}
+                              </span>
+                              <span className="text-xs font-black text-amber-400">
+                                {tx.currency} {tx.amount}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-zinc-300">
+                              <div>
+                                <span className="text-zinc-500">Plan:</span>{' '}
+                                <span className="font-semibold text-white">{tx.planName}</span>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500">Sender Phone/Acc:</span>{' '}
+                                <span className="font-mono font-bold text-amber-300">{tx.accountReference}</span>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500">Transaction Ref:</span>{' '}
+                                <span className="font-mono font-bold text-white">{tx.transactionRef}</span>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500">Submitted:</span>{' '}
+                                <span className="text-zinc-400">
+                                  {new Date(tx.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })},{' '}
+                                  {new Date(tx.paidAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Approval and Reject Action Buttons */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onApproveTransaction) {
+                                  onApproveTransaction(tx.id);
+                                  showToast(`Payment verified! Subscription activated for ${tx.userEmail}`, 'success');
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer transform hover:scale-105 transition-all"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>✓ Verify &amp; Approve</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onRejectTransaction) {
+                                  onRejectTransaction(tx.id);
+                                  showToast(`Transaction rejected for ${tx.userEmail}`, 'error');
+                                }
+                              }}
+                              className="px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 2. Overview Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
-                <div className="text-xs text-zinc-400 font-semibold">Total Revenue</div>
-                <div className="text-2xl font-black text-amber-400 mt-1">Rs. 1,489,200</div>
-                <div className="text-[10px] text-emerald-400 font-bold mt-1">+18.5% this month</div>
+                <div className="text-xs text-zinc-400 font-semibold">Total Verified Revenue</div>
+                <div className="text-2xl font-black text-amber-400 mt-1">
+                  Rs. {transactions.filter((t) => t.status === 'SUCCESS').reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                </div>
+                <div className="text-[10px] text-emerald-400 font-bold mt-1">Verified via JazzCash / Easypaisa</div>
               </div>
 
               <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
-                <div className="text-xs text-zinc-400 font-semibold">Active VIP Subscribers</div>
-                <div className="text-2xl font-black text-white mt-1">3,842 Users</div>
-                <div className="text-[10px] text-zinc-400 mt-1">JazzCash, Easypaisa, Cards</div>
+                <div className="text-xs text-zinc-400 font-semibold">Active Subscribers</div>
+                <div className="text-2xl font-black text-white mt-1">
+                  {transactions.filter((t) => t.status === 'SUCCESS').length} Verified
+                </div>
+                <div className="text-[10px] text-zinc-400 mt-1">Full Streaming Access Unlocked</div>
               </div>
 
               <div className="p-4 rounded-2xl bg-[#121320] border border-white/5">
-                <div className="text-xs text-zinc-400 font-semibold">Published Catalog</div>
+                <div className="text-xs text-zinc-400 font-semibold">Catalog Titles</div>
                 <div className="text-2xl font-black text-red-500 mt-1">{movies.length} Titles</div>
                 <div className="text-[10px] text-zinc-400 mt-1">Punjabi, Pakistani, Hindi, English</div>
               </div>
             </div>
 
+            {/* 3. Verified Subscribers List */}
             <div>
-              <h4 className="text-sm font-bold text-white mb-3">Recent Subscriber Payments</h4>
+              <h4 className="text-sm font-bold text-white mb-3">All Recorded Transactions</h4>
               <div className="space-y-2">
-                {[
-                  { name: 'Bilal Khan', email: 'bilal.k@gmail.com', plan: '3 Months Plan', amount: 'Rs. 499', method: 'JazzCash', status: 'ACTIVE' },
-                  { name: 'Hamza Farooq', email: 'hamza.f@gmail.com', plan: '1 Year Plan', amount: 'Rs. 2,999', method: 'Easypaisa', status: 'ACTIVE' },
-                  { name: 'Ayesha Malik', email: 'ayesha.m@yahoo.com', plan: 'Monthly Plan', amount: 'Rs. 199', method: 'Debit Card', status: 'ACTIVE' },
-                  { name: 'Zeeshan Ali', email: 'zeeshan.ali@gmail.com', plan: '3 Months Plan', amount: 'Rs. 499', method: 'Bank Transfer', status: 'ACTIVE' }
-                ].map((s, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 rounded-xl bg-[#121320] border border-white/5 text-xs"
-                  >
-                    <div>
-                      <div className="font-bold text-white">{s.name}</div>
-                      <div className="text-[10px] text-zinc-400">{s.email}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold text-zinc-300">{s.plan}</div>
-                      <div className="text-[10px] text-zinc-400">{s.method}</div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-amber-400">{s.amount}</span>
-                      <span className="block text-[9px] text-emerald-400 font-black">
-                        {s.status}
-                      </span>
-                    </div>
+                {transactions.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-[#121320] text-center text-xs text-zinc-500">
+                    No transactions recorded yet.
                   </div>
-                ))}
+                ) : (
+                  transactions.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-[#121320] border border-white/5 text-xs gap-2"
+                    >
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-2">
+                          <span>{t.userEmail}</span>
+                          <span className="font-mono text-[10px] text-zinc-400">({t.transactionRef})</span>
+                        </div>
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-2 mt-0.5">
+                          <span>Account: {t.accountReference}</span>
+                          <span>•</span>
+                          <span>{new Date(t.paidAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="sm:text-center">
+                        <div className="font-semibold text-zinc-300">{t.planName}</div>
+                        <div className="text-[10px] uppercase font-bold text-zinc-500">{t.gateway}</div>
+                      </div>
+
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center">
+                        <span className="font-bold text-amber-400">{t.currency} {t.amount}</span>
+                        <span
+                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                            t.status === 'SUCCESS'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : t.status === 'PENDING'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-red-500/20 text-red-400'
+                          }`}
+                        >
+                          {t.status === 'SUCCESS' ? 'VERIFIED ACTIVE' : t.status === 'PENDING' ? 'PENDING VERIFICATION' : 'FAILED'}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
+
           </div>
         )}
       </div>

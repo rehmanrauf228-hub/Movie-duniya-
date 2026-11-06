@@ -12,8 +12,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-DF6W6v4K.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-PxUPvXJx.css">
+    <script>
+      // Immediate Static Hosting Detector:
+      // If deployed from raw repository root on GitHub Pages, uncompiled .tsx cannot run in browsers.
+      // Immediately redirect to /docs/ where the compiled production build is located.
+      (function() {
+        try {
+          if (window.location.hostname.indexOf('github.io') !== -1) {
+            var path = window.location.pathname;
+            if (!path.includes('/docs') && !path.includes('/dist')) {
+              var cleanBase = path.replace(/\/+$/, '');
+              window.location.replace(cleanBase + '/docs/' + window.location.search + window.location.hash);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-C5dkWnWR.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C89smV1i.css">
   </head>
   <body style="margin: 0; background-color: #07070a; color: #ffffff; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;">
     <div id="root">
@@ -29,21 +45,6 @@
       </div>
     </div>
     <script>
-      // Intelligent Static Hosting Detector:
-      // If deployed from raw repository root on GitHub Pages, uncompiled .tsx cannot run.
-      // Automatically redirect to /docs/ where the compiled production build lives.
-      (function() {
-        if (window.location.hostname.indexOf('github.io') !== -1) {
-          var uncompiled = document.querySelector('script[src*="main.tsx"]');
-          if (uncompiled) {
-            var cleanBase = window.location.pathname.replace(/\/+$/, '');
-            if (!cleanBase.endsWith('/docs')) {
-              window.location.replace(cleanBase + '/docs/' + window.location.search + window.location.hash);
-            }
-          }
-        }
-      })();
-
       // Fallback Watchdog: If React hasn't mounted in 4.5 seconds, display helpful recovery options
       setTimeout(function() {
         var statusEl = document.getElementById('md-loader-status');

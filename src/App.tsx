@@ -27,6 +27,7 @@ import {
   saveMovieToFirestore,
   deleteMovieFromFirestore,
   saveTransactionToFirestore,
+  saveUserProfileToFirestore,
   logoutFirebaseAuth,
   auth
 } from './services/firebase';
@@ -260,17 +261,86 @@ export default function App() {
     });
   };
 
-  // Subscription Checkout Success Handler
+  // Subscription Checkout Submission Handler
   const handlePaymentSuccess = (tx: PaymentTransaction) => {
+    // Add transaction to history
     setTransactions((prev) => [tx, ...prev]);
     saveTransactionToFirestore(tx).catch((e) => console.warn('Firestore transaction log notice:', e));
+
+    // When a consumer submits payment, they do NOT immediately get active streaming access!
+    // They are set to PENDING_APPROVAL until the admin verifies the payment.
     if (user) {
-      setUser({
+      const pendingUser: UserAccount = {
         ...user,
-        hasActiveSubscription: true,
+        hasActiveSubscription: false,
+        subscriptionStatus: 'PENDING_APPROVAL',
         subscriptionPlan: tx.planName,
-        subscriptionExpiresAt: tx.expiresAt
-      });
+        subscriptionExpiresAt: tx.expiresAt,
+        pendingTransactionRef: tx.transactionRef
+      };
+      setUser(pendingUser);
+      saveUserProfileToFirestore(pendingUser).catch((e) => console.warn('Firestore profile update notice:', e));
+    }
+  };
+
+  // Admin verifies and approves a user's subscription payment
+  const handleApproveTransaction = (txId: string) => {
+    let approvedTx: PaymentTransaction | null = null;
+    const updatedTransactions = transactions.map((t) => {
+      if (t.id === txId) {
+        approvedTx = { ...t, status: 'SUCCESS' as const };
+        return approvedTx;
+      }
+      return t;
+    });
+
+    setTransactions(updatedTransactions);
+
+    if (approvedTx) {
+      saveTransactionToFirestore(approvedTx).catch((e) => console.warn('Firestore transaction log notice:', e));
+
+      // If the currently logged in user matches the transaction, activate their subscription
+      if (user && (user.email === (approvedTx as PaymentTransaction).userEmail || user.id === (approvedTx as PaymentTransaction).userId || user.pendingTransactionRef === (approvedTx as PaymentTransaction).transactionRef)) {
+        const activeUser: UserAccount = {
+          ...user,
+          hasActiveSubscription: true,
+          subscriptionStatus: 'ACTIVE',
+          subscriptionPlan: (approvedTx as PaymentTransaction).planName,
+          subscriptionExpiresAt: (approvedTx as PaymentTransaction).expiresAt,
+          pendingTransactionRef: undefined
+        };
+        setUser(activeUser);
+        saveUserProfileToFirestore(activeUser).catch((e) => console.warn('Firestore profile update notice:', e));
+      }
+    }
+  };
+
+  // Admin rejects a fraudulent or invalid transaction
+  const handleRejectTransaction = (txId: string) => {
+    let rejectedTx: PaymentTransaction | null = null;
+    const updatedTransactions = transactions.map((t) => {
+      if (t.id === txId) {
+        rejectedTx = { ...t, status: 'FAILED' as const };
+        return rejectedTx;
+      }
+      return t;
+    });
+
+    setTransactions(updatedTransactions);
+
+    if (rejectedTx) {
+      saveTransactionToFirestore(rejectedTx).catch((e) => console.warn('Firestore transaction log notice:', e));
+
+      if (user && (user.email === (rejectedTx as PaymentTransaction).userEmail || user.id === (rejectedTx as PaymentTransaction).userId || user.pendingTransactionRef === (rejectedTx as PaymentTransaction).transactionRef)) {
+        const resetUser: UserAccount = {
+          ...user,
+          hasActiveSubscription: false,
+          subscriptionStatus: 'NONE',
+          pendingTransactionRef: undefined
+        };
+        setUser(resetUser);
+        saveUserProfileToFirestore(resetUser).catch((e) => console.warn('Firestore profile update notice:', e));
+      }
     }
   };
 
@@ -279,8 +349,10 @@ export default function App() {
     setUser({
       ...user,
       hasActiveSubscription: false,
+      subscriptionStatus: 'NONE',
       subscriptionPlan: undefined,
-      subscriptionExpiresAt: undefined
+      subscriptionExpiresAt: undefined,
+      pendingTransactionRef: undefined
     });
   };
 
@@ -473,6 +545,10 @@ export default function App() {
           onSelectMovie={(m) => setActiveMovie(m)}
           onClose={() => setActiveMovie(null)}
           onOpenSubscribe={handleOpenSubscribe}
+          onOpenAuth={(tab) => {
+            setAuthModalMode(tab || 'signup');
+            setIsAuthOpen(true);
+          }}
           onUpdateContinueWatching={handleUpdateContinueWatching}
           onToggleWatchlist={handleToggleWatchlist}
           initialTime={user?.continueWatching[activeMovie.id]?.currentTime || 0}
@@ -489,7 +565,7 @@ export default function App() {
         userEmail={user?.email || 'user@movieduniya.com'}
       />
 
-      {/* 10. Admin Movie Upload Modal */}
+      {/* 10. Admin Movie Upload & Subscription Approvals Modal */}
       <AdminUploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -504,6 +580,9 @@ export default function App() {
             setUser({ ...user, role: 'user' });
           }
         }}
+        transactions={transactions}
+        onApproveTransaction={handleApproveTransaction}
+        onRejectTransaction={handleRejectTransaction}
       />
 
       {/* 11. User Account Modal */}

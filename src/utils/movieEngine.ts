@@ -100,6 +100,8 @@ export interface UserAccount {
   hasActiveSubscription: boolean;
   subscriptionPlan?: string;
   subscriptionExpiresAt?: string;
+  subscriptionStatus?: 'ACTIVE' | 'PENDING_APPROVAL' | 'EXPIRED' | 'NONE';
+  pendingTransactionRef?: string;
   watchlist: string[];
   continueWatching: Record<string, { currentTime: number; duration: number; updatedAt: string }>;
 }
@@ -136,27 +138,55 @@ export function filterMovies(
   });
 }
 
-export function canUserWatchMovie(user: UserAccount | null, movie: Movie): { canWatch: boolean; reason?: string } {
-  if (!movie.isVIP) {
-    return { canWatch: true };
+export function canUserWatchMovie(
+  user: UserAccount | null,
+  movie: Movie
+): { canWatch: boolean; reason?: 'ADMIN' | 'ACTIVE_SUBSCRIPTION' | 'LOGIN_REQUIRED' | 'PENDING_VERIFICATION' | 'SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_EXPIRED'; message?: string } {
+  // 1. Authorized Administrators have unrestricted access to all movies
+  if (user && user.role === 'admin') {
+    return { canWatch: true, reason: 'ADMIN' };
   }
+
+  // 2. Unregistered or guest visitors must sign up first
   if (!user) {
-    return { canWatch: false, reason: 'Login required to stream VIP movies' };
+    return {
+      canWatch: false,
+      reason: 'LOGIN_REQUIRED',
+      message: 'Please create an account or sign in to subscribe and watch movies.'
+    };
   }
-  if (user.role === 'admin') {
-    return { canWatch: true };
+
+  // 3. User submitted payment but administrator has not verified it yet
+  if (user.subscriptionStatus === 'PENDING_APPROVAL') {
+    return {
+      canWatch: false,
+      reason: 'PENDING_VERIFICATION',
+      message: 'Your payment verification is pending. The administrator will verify and approve your subscription shortly.'
+    };
   }
-  if (user.hasActiveSubscription) {
-    if (user.subscriptionExpiresAt) {
-      const expiry = new Date(user.subscriptionExpiresAt).getTime();
-      if (expiry > Date.now()) {
-        return { canWatch: true };
-      }
-    } else {
-      return { canWatch: true };
+
+  // 4. User does not have an active subscription
+  if (!user.hasActiveSubscription || user.subscriptionStatus !== 'ACTIVE') {
+    return {
+      canWatch: false,
+      reason: 'SUBSCRIPTION_REQUIRED',
+      message: 'A verified subscription plan is required to watch movies on MovieDuniya.'
+    };
+  }
+
+  // 5. Subscription Expiry Check
+  if (user.subscriptionExpiresAt) {
+    const expiry = new Date(user.subscriptionExpiresAt).getTime();
+    if (expiry <= Date.now()) {
+      return {
+        canWatch: false,
+        reason: 'SUBSCRIPTION_EXPIRED',
+        message: 'Your subscription plan has expired. Please renew to continue streaming.'
+      };
     }
   }
-  return { canWatch: false, reason: 'Active subscription required for VIP movie' };
+
+  return { canWatch: true, reason: 'ACTIVE_SUBSCRIPTION' };
 }
 
 export function calculateSubscriptionExpiry(planId: string, fromDate = new Date()): string {

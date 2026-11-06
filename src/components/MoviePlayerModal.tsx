@@ -24,7 +24,7 @@ import {
   Radio,
   Clock
 } from 'lucide-react';
-import { Movie, UserAccount, formatDuration } from '../utils/movieEngine';
+import { Movie, UserAccount, formatDuration, canUserWatchMovie } from '../utils/movieEngine';
 
 interface MoviePlayerModalProps {
   movie: Movie | null;
@@ -33,6 +33,7 @@ interface MoviePlayerModalProps {
   onSelectMovie?: (m: Movie) => void;
   onClose: () => void;
   onOpenSubscribe: (planId?: string) => void;
+  onOpenAuth?: (tab?: 'login' | 'signup') => void;
   onUpdateContinueWatching: (movieId: string, currentTime: number, duration: number) => void;
   onToggleWatchlist?: (movieId: string) => void;
   initialTime?: number;
@@ -45,16 +46,16 @@ export const MoviePlayerModal: React.FC<MoviePlayerModalProps> = ({
   onSelectMovie,
   onClose,
   onOpenSubscribe,
+  onOpenAuth,
   onUpdateContinueWatching,
   onToggleWatchlist,
   initialTime = 0
 }) => {
   if (!movie) return null;
 
-  const isSubscribedOrAdmin = Boolean(
-    user?.role === 'admin' || user?.hasActiveSubscription
-  );
-  const isLocked = movie.isVIP && !isSubscribedOrAdmin;
+  // Strict paywall check: only admin or verified active subscriber can watch movies
+  const watchCheck = canUserWatchMovie(user, movie);
+  const isLocked = !watchCheck.canWatch;
   const isSavedInWatchlist = Boolean(user?.watchlist?.includes(movie.id));
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -283,46 +284,140 @@ export const MoviePlayerModal: React.FC<MoviePlayerModalProps> = ({
               playsInline
             />
 
-            {/* Lock Paywall Overlay if VIP & Not Subscribed */}
+            {/* Paywall Overlay if Not Verified Subscriber or Admin */}
             {isLocked && (
-              <div className="absolute inset-0 bg-black/92 backdrop-blur-md z-20 flex items-center justify-center p-6 text-center animate-in fade-in duration-300">
+              <div className="absolute inset-0 bg-black/94 backdrop-blur-md z-20 flex items-center justify-center p-6 text-center animate-in fade-in duration-300">
                 <div className="max-w-md w-full bg-[#13141f] border border-red-500/50 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(239,68,68,0.3)] space-y-5">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-black flex items-center justify-center mx-auto shadow-lg shadow-amber-500/30">
-                    <Crown className="w-9 h-9 fill-black text-black" />
-                  </div>
+                  {watchCheck.reason === 'PENDING_VERIFICATION' ? (
+                    <>
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-black flex items-center justify-center mx-auto shadow-lg shadow-amber-500/30">
+                        <Clock className="w-9 h-9 stroke-[2.5]" />
+                      </div>
 
-                  <div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 text-red-400 text-xs font-black uppercase tracking-wider mb-2">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>VIP Exclusive Movie</span>
-                    </span>
-                    <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                      Subscription Required
-                    </h3>
-                    <p className="text-xs sm:text-sm text-zinc-300 mt-2 leading-relaxed">
-                      <span className="text-white font-bold">{movie.title}</span> is available exclusively to MovieDuniya VIP subscribers. Subscribe today to enjoy unlimited streaming on all devices!
-                    </p>
-                  </div>
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-black uppercase tracking-wider mb-2">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Verification in Progress</span>
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                          Payment Under Verification
+                        </h3>
+                        <p className="text-xs text-amber-300/90 font-medium mt-1">
+                          پیمنٹ تصدیق زیرِ غور ہے • ایڈمن کی منظوری کے بعد مووی چلے گی
+                        </p>
+                        <p className="text-xs sm:text-sm text-zinc-300 mt-3 leading-relaxed">
+                          Your subscription payment has been received! The MovieDuniya administrator is currently reviewing your payment details. As soon as the payment is verified, full HD streaming will be unlocked immediately.
+                        </p>
+                        {user?.pendingTransactionRef && (
+                          <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-amber-500/30 text-left">
+                            <span className="text-[10px] text-zinc-400 block uppercase font-bold">Transaction Reference</span>
+                            <span className="text-xs font-mono font-bold text-amber-400">{user.pendingTransactionRef}</span>
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="pt-2 space-y-3">
-                    <button
-                      onClick={() => {
-                        onClose();
-                        onOpenSubscribe('quarterly');
-                      }}
-                      className="w-full py-3.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm shadow-[0_0_25px_rgba(239,68,68,0.7)] cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-0.5 transition-all"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Unlock VIP for Rs. 199 / Month</span>
-                    </button>
+                      <div className="pt-2 space-y-3">
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="w-full py-3.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-sm shadow-[0_0_25px_rgba(245,158,11,0.5)] cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-0.5 transition-all"
+                        >
+                          <Clock className="w-4 h-4" />
+                          <span>Refresh Verification Status</span>
+                        </button>
 
-                    <button
-                      onClick={onClose}
-                      className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                    >
-                      Browse Free Catalog
-                    </button>
-                  </div>
+                        <button
+                          onClick={onClose}
+                          className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                          Close Player
+                        </button>
+                      </div>
+                    </>
+                  ) : watchCheck.reason === 'LOGIN_REQUIRED' ? (
+                    <>
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-red-600/30">
+                        <Lock className="w-9 h-9" />
+                      </div>
+
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 text-red-400 text-xs font-black uppercase tracking-wider mb-2">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Account Required</span>
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                          Sign In to Stream
+                        </h3>
+                        <p className="text-xs text-red-300/90 font-medium mt-1">
+                          مووی دیکھنے کے لیے پہلے اکاونٹ بنائیں یا لاگ ان کریں
+                        </p>
+                        <p className="text-xs sm:text-sm text-zinc-300 mt-2 leading-relaxed">
+                          Please create an account or sign in to activate your MovieDuniya subscription and watch <span className="text-white font-bold">{movie.title}</span>.
+                        </p>
+                      </div>
+
+                      <div className="pt-2 space-y-3">
+                        <button
+                          onClick={() => {
+                            onClose();
+                            if (onOpenAuth) onOpenAuth('signup');
+                          }}
+                          className="w-full py-3.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm shadow-[0_0_25px_rgba(239,68,68,0.7)] cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-0.5 transition-all"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>Create Account / Sign In</span>
+                        </button>
+
+                        <button
+                          onClick={onClose}
+                          className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                          Browse Catalog
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-black flex items-center justify-center mx-auto shadow-lg shadow-amber-500/30">
+                        <Crown className="w-9 h-9 fill-black text-black" />
+                      </div>
+
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 text-red-400 text-xs font-black uppercase tracking-wider mb-2">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Subscription Required</span>
+                        </span>
+                        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                          Active Plan Required
+                        </h3>
+                        <p className="text-xs text-amber-300/90 font-medium mt-1">
+                          مووی دیکھنے کے لیے سبسکرپشن پلان لینا ضروری ہے
+                        </p>
+                        <p className="text-xs sm:text-sm text-zinc-300 mt-2 leading-relaxed">
+                          All movies on MovieDuniya require an active verified subscription. Choose your plan to stream in full 1080p / 4K HD on any mobile, tablet or PC!
+                        </p>
+                      </div>
+
+                      <div className="pt-2 space-y-3">
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onOpenSubscribe('quarterly');
+                          }}
+                          className="w-full py-3.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm shadow-[0_0_25px_rgba(239,68,68,0.7)] cursor-pointer flex items-center justify-center gap-2 transform hover:-translate-y-0.5 transition-all"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>Subscribe Starting at Rs. 199/mo</span>
+                        </button>
+
+                        <button
+                          onClick={onClose}
+                          className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                          Back to Home
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}

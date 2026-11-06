@@ -53,14 +53,6 @@ jobs:
         with:
           path: './dist'
 
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          keep_files: false
-
   deploy:
     environment:
       name: github-pages

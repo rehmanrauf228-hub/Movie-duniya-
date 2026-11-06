@@ -85,7 +85,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
           gateway,
           accountReference: accountRef,
           transactionRef: res.transactionRef,
-          status: 'SUCCESS',
+          status: 'PENDING', // Awaiting Admin Verification per user instruction
           paidAt,
           expiresAt: expiryDate.toISOString()
         };
@@ -429,19 +429,19 @@ Watch • Upload • Enjoy
         {/* SUCCESS STATE */}
         {step === 'SUCCESS' && transactionResult && (
           <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+            <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
               <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
             </div>
 
             <div>
-              <span className="text-xs font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30">
-                Payment Confirmed
+              <span className="text-xs font-black uppercase tracking-wider text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">
+                Payment Submitted • Awaiting Admin Verification
               </span>
               <h3 className="text-2xl sm:text-3xl font-black text-white mt-2">
-                Welcome to MovieDuniya VIP!
+                پیمنٹ جمع ہو گئی ہے • تصدیق کا انتظار ہے
               </h3>
-              <p className="text-sm text-zinc-300 max-w-md mx-auto mt-1">
-                Your subscription to the <span className="font-bold text-white">{transactionResult.planName}</span> is now active. All VIP 4K &amp; HD movies are unlocked.
+              <p className="text-sm text-zinc-300 max-w-md mx-auto mt-1 leading-relaxed">
+                Thank you! Your payment proof for <span className="font-bold text-white">{transactionResult.planName}</span> has been submitted to the MovieDuniya Administrator. Once verified, your account will be activated immediately!
               </p>
             </div>
 
@@ -449,10 +449,10 @@ Watch • Upload • Enjoy
             <div className="max-w-md mx-auto p-4 rounded-2xl bg-[#161722] border border-white/10 text-left text-xs space-y-2">
               <div className="flex justify-between text-zinc-400">
                 <span>Transaction Ref:</span>
-                <span className="font-mono text-zinc-200 font-bold">{transactionResult.transactionRef}</span>
+                <span className="font-mono text-amber-300 font-bold">{transactionResult.transactionRef}</span>
               </div>
               <div className="flex justify-between text-zinc-400">
-                <span>Amount Paid:</span>
+                <span>Amount:</span>
                 <span className="text-white font-bold">Rs. {transactionResult.amount}</span>
               </div>
               <div className="flex justify-between text-zinc-400">
@@ -460,9 +460,14 @@ Watch • Upload • Enjoy
                 <span className="text-white uppercase font-bold">{transactionResult.gateway}</span>
               </div>
               <div className="flex justify-between text-zinc-400">
-                <span>Active Until:</span>
-                <span className="text-amber-400 font-bold">
-                  {new Date(transactionResult.expiresAt).toLocaleDateString()}
+                <span>Account Reference:</span>
+                <span className="text-zinc-200 font-medium">{transactionResult.accountReference}</span>
+              </div>
+              <div className="flex justify-between text-zinc-400 pt-1 border-t border-white/5">
+                <span>Subscription Status:</span>
+                <span className="text-amber-400 font-black flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span>PENDING ADMIN VERIFICATION</span>
                 </span>
               </div>
             </div>
@@ -474,14 +479,14 @@ Watch • Upload • Enjoy
                 className="w-full sm:w-auto px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-colors"
               >
                 <Download className="w-4 h-4" />
-                <span>Download Invoice</span>
+                <span>Download Proof Receipt</span>
               </button>
 
               <button
                 onClick={onClose}
                 className="w-full sm:w-auto px-8 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/40 cursor-pointer transition-colors"
               >
-                Start Watching Now
+                Done / View Movies
               </button>
             </div>
           </div>
