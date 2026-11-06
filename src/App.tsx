@@ -22,6 +22,15 @@ import {
   PaymentTransaction
 } from './utils/movieEngine';
 import { isSupabaseConfigured, fetchSupabaseMovies } from './services/supabase';
+import {
+  fetchMoviesFromFirestore,
+  saveMovieToFirestore,
+  deleteMovieFromFirestore,
+  saveTransactionToFirestore,
+  logoutFirebaseAuth,
+  auth
+} from './services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   // 1. Movies State with LocalStorage Persistence
@@ -46,15 +55,43 @@ export default function App() {
     }
   }, [movies]);
 
-  // Sync from Supabase Cloud on mount if connected
+  // Sync from Firebase Firestore and Supabase Cloud on mount
   useEffect(() => {
-    if (isSupabaseConfigured()) {
-      fetchSupabaseMovies().then((cloudMovies) => {
-        if (cloudMovies && cloudMovies.length > 0) {
-          setMovies(cloudMovies);
+    // 1. First priority: Google Firebase Firestore
+    fetchMoviesFromFirestore()
+      .then((fbMovies) => {
+        if (fbMovies && fbMovies.length > 0) {
+          setMovies(fbMovies);
+        } else if (isSupabaseConfigured()) {
+          // 2. Secondary cloud sync
+          fetchSupabaseMovies().then((cloudMovies) => {
+            if (cloudMovies && cloudMovies.length > 0) {
+              setMovies(cloudMovies);
+            }
+          });
         }
-      }).catch((err) => console.warn('Supabase fetch bypassed:', err));
-    }
+      })
+      .catch((err) => console.warn('Firestore fetch notice:', err));
+
+    // Listen to Firebase Auth state
+    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser) {
+        const isAdmin = fbUser.email === 'rehmanrauf228@gmail.com' || (fbUser.email && fbUser.email.includes('admin'));
+        setUser((prev) => ({
+          id: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || (prev ? prev.name : 'Movie Lover'),
+          email: fbUser.email || (prev ? prev.email : 'user@movieduniya.com'),
+          role: isAdmin ? 'admin' : (prev ? prev.role : 'subscriber'),
+          hasActiveSubscription: prev ? prev.hasActiveSubscription : true,
+          subscriptionPlan: prev?.subscriptionPlan || (isAdmin ? 'Lifetime Administrator' : '3 Months Plan'),
+          subscriptionExpiresAt: prev?.subscriptionExpiresAt || new Date(Date.now() + 86400000 * 90).toISOString(),
+          watchlist: prev ? prev.watchlist : ['pun-01', 'pak-01'],
+          continueWatching: prev ? prev.continueWatching : {}
+        }));
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   // Auto-open movie player if URL contains ?watch=movieId
@@ -94,19 +131,7 @@ export default function App() {
     } catch (e) {
       console.error('Error loading user from storage:', e);
     }
-    return {
-      id: 'usr-sub-01',
-      name: 'Rehman Rauf',
-      email: 'rehmanrauf228@gmail.com',
-      role: 'admin',
-      hasActiveSubscription: true,
-      subscriptionPlan: '3 Months Plan (Most Popular)',
-      subscriptionExpiresAt: new Date(Date.now() + 86400000 * 90).toISOString(),
-      watchlist: ['pun-01', 'pak-01'],
-      continueWatching: {
-        'pun-01': { currentTime: 2400, duration: 8280, updatedAt: new Date().toISOString() }
-      }
-    };
+    return null;
   });
 
   useEffect(() => {
@@ -172,20 +197,24 @@ export default function App() {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [accountDefaultTab, setAccountDefaultTab] = useState('profile');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signup' | 'login'>('signup');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | 'contact' | null>(null);
 
   // Handlers for movie management
   const handleAddMovie = (newMovie: Movie) => {
     setMovies((prev) => [newMovie, ...prev]);
+    saveMovieToFirestore(newMovie).catch((e) => console.warn('Firestore movie add notice:', e));
   };
 
   const handleUpdateMovie = (updatedMovie: Movie) => {
     setMovies((prev) => prev.map((m) => (m.id === updatedMovie.id ? updatedMovie : m)));
+    saveMovieToFirestore(updatedMovie).catch((e) => console.warn('Firestore movie update notice:', e));
   };
 
   const handleDeleteMovie = (movieId: string) => {
     setMovies((prev) => prev.filter((m) => m.id !== movieId));
+    deleteMovieFromFirestore(movieId).catch((e) => console.warn('Firestore movie delete notice:', e));
   };
 
   // Watchlist Toggle
@@ -234,6 +263,7 @@ export default function App() {
   // Subscription Checkout Success Handler
   const handlePaymentSuccess = (tx: PaymentTransaction) => {
     setTransactions((prev) => [tx, ...prev]);
+    saveTransactionToFirestore(tx).catch((e) => console.warn('Firestore transaction log notice:', e));
     if (user) {
       setUser({
         ...user,
@@ -315,14 +345,20 @@ export default function App() {
         }}
         user={user}
         onOpenUpload={() => setIsUploadOpen(true)}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={(mode) => {
+          setAuthModalMode(mode || 'signup');
+          setIsAuthOpen(true);
+        }}
         onOpenAccount={(tab) => {
           setAccountDefaultTab(tab || 'profile');
           setIsAccountOpen(true);
         }}
         onOpenSubscribe={handleOpenSubscribe}
         onOpenSearch={() => setIsSearchOpen(true)}
-        onLogout={() => setUser(null)}
+        onLogout={() => {
+          logoutFirebaseAuth();
+          setUser(null);
+        }}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
       />
@@ -335,11 +371,22 @@ export default function App() {
             {/* 2. Hero Section */}
             <Hero
               onStartWatching={() => {
-                // Play first trending movie or scroll to browse
+                if (!user) {
+                  setAuthModalMode('signup');
+                  setIsAuthOpen(true);
+                  return;
+                }
                 const firstMovie = movies.find((m) => m.isPublished);
                 if (firstMovie) setActiveMovie(firstMovie);
               }}
-              onSubscribe={() => handleOpenSubscribe('quarterly')}
+              onSubscribe={() => {
+                if (!user) {
+                  setAuthModalMode('signup');
+                  setIsAuthOpen(true);
+                  return;
+                }
+                handleOpenSubscribe('quarterly');
+              }}
             />
 
             {/* 3. Browse by Language */}
@@ -465,7 +512,10 @@ export default function App() {
         onClose={() => setIsAccountOpen(false)}
         user={user}
         defaultTab={accountDefaultTab}
-        onLogout={() => setUser(null)}
+        onLogout={() => {
+          logoutFirebaseAuth();
+          setUser(null);
+        }}
         onOpenSubscribe={handleOpenSubscribe}
         onCancelSubscription={handleCancelSubscription}
         transactions={transactions}
@@ -476,11 +526,12 @@ export default function App() {
         onSwitchAccountType={handleSwitchAccountType}
       />
 
-      {/* 12. Authentication Modal */}
+      {/* 12. Authentication Modal (Defaults to Create Account / Sign Up) */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onLoginSuccess={(acc) => setUser(acc)}
+        initialMode={authModalMode}
       />
 
       {/* 13. Search Modal */}

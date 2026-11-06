@@ -36,6 +36,13 @@ import {
   fetchSupabaseMovies,
   SUPABASE_SQL_SCHEMA
 } from '../services/supabase';
+import {
+  uploadMediaToFirebaseStorage,
+  saveMovieToFirestore,
+  deleteMovieFromFirestore,
+  testFirebaseConnection,
+  firebaseConfig
+} from '../services/firebase';
 
 interface AdminUploadModalProps {
   isOpen: boolean;
@@ -180,18 +187,29 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
     { label: 'MP4 Action (Tears of Steel)', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' }
   ];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'poster' | 'backdrop' | 'video') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'poster' | 'backdrop' | 'video') => {
     const file = e.target.files?.[0];
     if (file) {
-      const fakeUrl = URL.createObjectURL(file);
+      const localUrl = URL.createObjectURL(file);
       if (target === 'poster') {
-        setPosterUrl(fakeUrl);
+        setPosterUrl(localUrl);
       } else if (target === 'backdrop') {
-        setBackdropUrl(fakeUrl);
+        setBackdropUrl(localUrl);
       } else {
-        setVideoUrl(fakeUrl);
+        setVideoUrl(localUrl);
       }
-      showToast(`${file.name} selected as preview asset.`);
+      showToast(`Uploading ${file.name} to Firebase Storage...`);
+
+      // Upload to Firebase Cloud Storage
+      const res = await uploadMediaToFirebaseStorage(file, target === 'video' ? 'media' : 'posters');
+      if (res.success && res.url) {
+        if (target === 'poster') setPosterUrl(res.url);
+        else if (target === 'backdrop') setBackdropUrl(res.url);
+        else setVideoUrl(res.url);
+        showToast(`${file.name} saved to Firebase Cloud Storage!`, 'success');
+      } else {
+        showToast(`${file.name} ready as local asset preview.`);
+      }
     }
   };
 
@@ -244,13 +262,17 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
       showToast(`Movie "${title}" published and added to homepage!`);
     }
 
-    // Background Sync to Supabase if configured
+    // Background Sync to Firebase Firestore & Supabase
+    saveMovieToFirestore(movieObj).then((res) => {
+      if (res.success) {
+        console.log('Synchronized to Firebase Firestore:', movieObj.title);
+      }
+    });
+
     if (isSupabaseConfigured()) {
       upsertSupabaseMovie(movieObj).then((res) => {
         if (res.success) {
           console.log('Synchronized to Supabase:', movieObj.title);
-        } else {
-          console.warn('Supabase sync warning:', res.error);
         }
       });
     }
@@ -288,6 +310,7 @@ export const AdminUploadModal: React.FC<AdminUploadModalProps> = ({
   const handleDeleteWithConfirmation = async (movieId: string, movieTitle: string) => {
     if (window.confirm(`Are you sure you want to delete "${movieTitle}"? This cannot be undone.`)) {
       onDeleteMovie(movieId);
+      deleteMovieFromFirestore(movieId).catch((e) => console.warn('Firestore delete notice:', e));
       if (isSupabaseConfigured()) {
         deleteSupabaseMovie(movieId);
       }

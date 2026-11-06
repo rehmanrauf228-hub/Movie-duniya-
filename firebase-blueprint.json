@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "Movie": {
+      "title": "Movie",
+      "description": "Movie or Web Series record with streaming media URLs and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "poster": { "type": "string", "maxLength": 1000 },
+        "backdrop": { "type": "string", "maxLength": 1000 },
+        "videoUrl": { "type": "string", "maxLength": 1000 },
+        "videoType": { "type": "string", "enum": ["mp4", "hls", "auto"] },
+        "language": { "type": "string", "enum": ["Punjabi", "English", "Pakistani", "Hindi", "Other"] },
+        "category": { "type": "string", "maxLength": 100 },
+        "genre": { "type": "array" },
+        "releaseYear": { "type": "number" },
+        "duration": { "type": "string", "maxLength": 50 },
+        "rating": { "type": "string", "maxLength": 20 },
+        "isVIP": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "isTrending": { "type": "boolean" },
+        "views": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "poster", "videoUrl", "language", "category"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered subscriber or viewer account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin", "subscriber", "user"] },
+        "hasActiveSubscription": { "type": "boolean" },
+        "subscriptionPlan": { "type": "string", "maxLength": 100 },
+        "subscriptionExpiresAt": { "type": "string" },
+        "watchlist": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "SubscriptionTransaction": {
+      "title": "SubscriptionTransaction",
+      "description": "Verified JazzCash, Easypaisa, or Card transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 150 },
+        "planId": { "type": "string", "maxLength": 50 },
+        "planName": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 20 },
+        "gateway": { "type": "string", "enum": ["jazzcash", "easypaisa", "card", "bank"] },
+        "accountReference": { "type": "string", "maxLength": 100 },
+        "transactionRef": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["SUCCESS", "PENDING", "FAILED"] },
+        "paidAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "planId", "amount", "status"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrator mapping document",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/movies/{movieId}": {
+      "schema": "Movie",
+      "description": "Catalog of movies and series. Read open to public for published items; write restricted to admins."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Individual user accounts with private subscriptions and watchlists."
+    },
+    "/transactions/{transactionId}": {
+      "schema": "SubscriptionTransaction",
+      "description": "Payment logs for plan upgrades."
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "List of authorized administrator UIDs."
+    }
+  }
+}
