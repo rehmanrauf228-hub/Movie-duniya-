@@ -29,12 +29,31 @@
       </div>
     </div>
     <script>
-      // Fallback Watchdog: If React hasn't mounted in 4.5 seconds, provide instant refresh/clear options
+      // Intelligent Static Hosting Detector:
+      // If deployed from raw repository root on GitHub Pages, uncompiled .tsx cannot run.
+      // Automatically redirect to /docs/ where the compiled production build lives.
+      (function() {
+        if (window.location.hostname.indexOf('github.io') !== -1) {
+          var uncompiled = document.querySelector('script[src*="main.tsx"]');
+          if (uncompiled) {
+            var cleanBase = window.location.pathname.replace(/\/+$/, '');
+            if (!cleanBase.endsWith('/docs')) {
+              window.location.replace(cleanBase + '/docs/' + window.location.search + window.location.hash);
+            }
+          }
+        }
+      })();
+
+      // Fallback Watchdog: If React hasn't mounted in 4.5 seconds, display helpful recovery options
       setTimeout(function() {
         var statusEl = document.getElementById('md-loader-status');
         if (statusEl && document.getElementById('md-initial-loader')) {
-          statusEl.innerHTML = '<span style="color:#ef4444;font-weight:600;">Taking a moment...</span><br><br>' +
-            '<button onclick="localStorage.clear();window.location.reload();" style="background:#dc2626;color:#ffffff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Clear Cache & Refresh</button>';
+          statusEl.innerHTML = '<span style="color:#ef4444;font-weight:700;font-size:14px;">App Initialization Notice</span><br>' +
+            '<p style="color:#d1d5db;font-size:12px;margin:8px 0;max-width:320px;">If loading takes more than a few seconds, click below to launch the compiled version or reset cache:</p>' +
+            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;">' +
+            '<button onclick="var p=window.location.pathname.replace(/\\/+$/,\'\');if(!p.endsWith(\'/docs\')){window.location.href=p+\'/docs/\';}else{window.location.reload();}" style="background:#ef4444;color:#ffffff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Launch App</button>' +
+            '<button onclick="localStorage.clear();sessionStorage.clear();window.location.reload();" style="background:rgba(255,255,255,0.15);color:#ffffff;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Clear Cache & Refresh</button>' +
+            '</div>';
         }
       }, 4500);
     </script>

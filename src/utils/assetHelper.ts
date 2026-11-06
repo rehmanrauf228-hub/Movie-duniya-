@@ -8,7 +8,8 @@ export function getAssetUrl(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
     return path;
   }
-  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const rawBase = import.meta.env.BASE_URL || './';
+  const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+  const cleanPath = path.replace(/^\//, '');
   return `${base}${cleanPath}`;
 }

@@ -1,28 +1,22 @@
 name: Deploy Movie Duniya to GitHub Pages
 
 on:
-  # Trigger the workflow on push to main branch
   push:
     branches:
       - main
       - master
-  # Allow manual trigger from the GitHub Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
-# Allow one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# NOTE: cancel-in-progress is set to false to prevent aborting active deployments which causes deployment_queued lockups.
 concurrency:
   group: 'pages'
   cancel-in-progress: false
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     steps:
@@ -46,20 +40,27 @@ jobs:
       - name: Build Production Web App for GitHub Pages
         run: npm run build
         env:
-          VITE_BASE: '/Movie-duniya/'
+          VITE_BASE: './'
 
-      - name: Verify dist folder
+      - name: Verify build artifacts
         run: |
           ls -la dist/
-          test -f dist/index.html || (echo "dist/index.html is missing!" && exit 1)
-          test -f dist/404.html || (echo "dist/404.html is missing!" && exit 1)
+          test -f dist/index.html || (echo "dist/index.html missing!" && exit 1)
+          test -f dist/404.html || (echo "dist/404.html missing!" && exit 1)
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
-  # Deployment job
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          keep_files: false
+
   deploy:
     environment:
       name: github-pages

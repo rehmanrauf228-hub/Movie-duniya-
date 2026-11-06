@@ -4,9 +4,9 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(({ command }) => {
-  // Use '/Movie-duniya/' for GitHub Pages production deployments.
+  // Use relative base './' for build so it works identically on /Movie-duniya-/, /Movie-duniya/, /docs/, or any subpath
   // In dev server mode, use '/' for clean local preview.
-  const base = process.env.VITE_BASE || (command === 'build' ? '/Movie-duniya/' : '/');
+  const base = process.env.VITE_BASE || (command === 'build' ? './' : '/');
 
   return {
     base,

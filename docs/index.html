@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MovieDuniya - Watch, Upload & Enjoy Streaming</title>
+    <meta name="description" content="Your ultimate destination for Punjabi, English, Pakistani & Hindi movies and web series with HD streaming, subscriptions, and creator upload system." />
+    <meta property="og:title" content="MovieDuniya - Watch, Upload & Enjoy Streaming" />
+    <meta property="og:description" content="Your ultimate destination for Punjabi, English, Pakistani & Hindi movies and web series with HD streaming, subscriptions, and creator upload system." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-CtOiV9Pg.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C4LTKM8V.css">
+  </head>
+  <body style="margin: 0; background-color: #07070a; color: #ffffff; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;">
+    <div id="root">
+      <div id="md-initial-loader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1c0a0e 0%, #07070a 100%);">
+        <div style="font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: -0.5px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
+          <span style="color: #ef4444;">Movie</span><span>Duniya</span>
+        </div>
+        <div style="width: 36px; height: 36px; border: 3px solid rgba(239,68,68,0.2); border-top-color: #ef4444; border-radius: 50%; animation: mdSpin 0.8s linear infinite;"></div>
+        <p id="md-loader-status" style="margin-top: 16px; font-size: 13px; color: #9ca3af; letter-spacing: 0.5px; text-align: center;">
+          Loading MovieDuniya...
+        </p>
+        <style>@keyframes mdSpin{to{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
+    <script>
+      // Intelligent Static Hosting Detector:
+      // If deployed from raw repository root on GitHub Pages, uncompiled .tsx cannot run.
+      // Automatically redirect to /docs/ where the compiled production build lives.
+      (function() {
+        if (window.location.hostname.indexOf('github.io') !== -1) {
+          var uncompiled = document.querySelector('script[src*="main.tsx"]');
+          if (uncompiled) {
+            var cleanBase = window.location.pathname.replace(/\/+$/, '');
+            if (!cleanBase.endsWith('/docs')) {
+              window.location.replace(cleanBase + '/docs/' + window.location.search + window.location.hash);
+            }
+          }
+        }
+      })();
+
+      // Fallback Watchdog: If React hasn't mounted in 4.5 seconds, display helpful recovery options
+      setTimeout(function() {
+        var statusEl = document.getElementById('md-loader-status');
+        if (statusEl && document.getElementById('md-initial-loader')) {
+          statusEl.innerHTML = '<span style="color:#ef4444;font-weight:700;font-size:14px;">App Initialization Notice</span><br>' +
+            '<p style="color:#d1d5db;font-size:12px;margin:8px 0;max-width:320px;">If loading takes more than a few seconds, click below to launch the compiled version or reset cache:</p>' +
+            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px;">' +
+            '<button onclick="var p=window.location.pathname.replace(/\\/+$/,\'\');if(!p.endsWith(\'/docs\')){window.location.href=p+\'/docs/\';}else{window.location.reload();}" style="background:#ef4444;color:#ffffff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Launch App</button>' +
+            '<button onclick="localStorage.clear();sessionStorage.clear();window.location.reload();" style="background:rgba(255,255,255,0.15);color:#ffffff;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Clear Cache & Refresh</button>' +
+            '</div>';
+        }
+      }, 4500);
+    </script>
+  </body>
+</html>
+
