@@ -3,9 +3,13 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
+  // Use '/Movie-duniya/' for GitHub Pages production deployments.
+  // In dev server mode, use '/' for clean local preview.
+  const base = process.env.VITE_BASE || (command === 'build' ? '/Movie-duniya/' : '/');
+
   return {
-    base: '/',
+    base,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

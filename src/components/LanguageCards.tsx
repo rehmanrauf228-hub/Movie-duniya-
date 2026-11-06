@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, ArrowRight } from 'lucide-react';
+import { getAssetUrl } from '../utils/assetHelper';
 
 interface LanguageCardsProps {
   onSelectLanguage: (lang: string) => void;
@@ -17,7 +18,7 @@ export const LanguageCards: React.FC<LanguageCardsProps> = ({
       id: 'Punjabi',
       title: 'Punjabi',
       subtitle: 'Movies',
-      image: '/assets/generated/cat-punjabi.png',
+      image: getAssetUrl('/assets/generated/cat-punjabi.png'),
       badge: '250+ Titles',
       color: 'from-amber-600/40'
     },
@@ -25,7 +26,7 @@ export const LanguageCards: React.FC<LanguageCardsProps> = ({
       id: 'English',
       title: 'English',
       subtitle: 'Movies',
-      image: '/assets/generated/cat-english.png',
+      image: getAssetUrl('/assets/generated/cat-english.png'),
       badge: '1,200+ Titles',
       color: 'from-blue-600/40'
     },
@@ -33,7 +34,7 @@ export const LanguageCards: React.FC<LanguageCardsProps> = ({
       id: 'Pakistani',
       title: 'Pakistani',
       subtitle: 'Movies',
-      image: '/assets/generated/cat-pakistani.png',
+      image: getAssetUrl('/assets/generated/cat-pakistani.png'),
       badge: '400+ Titles',
       color: 'from-emerald-600/40'
     },
@@ -41,7 +42,7 @@ export const LanguageCards: React.FC<LanguageCardsProps> = ({
       id: 'Hindi',
       title: 'Hindi',
       subtitle: 'Movies',
-      image: '/assets/generated/cat-hindi.png',
+      image: getAssetUrl('/assets/generated/cat-hindi.png'),
       badge: '1,800+ Titles',
       color: 'from-rose-600/40'
     }

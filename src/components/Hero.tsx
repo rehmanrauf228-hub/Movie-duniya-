@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Crown, Sparkles } from 'lucide-react';
+import { getAssetUrl } from '../utils/assetHelper';
 
 interface HeroProps {
   onStartWatching: () => void;
@@ -90,7 +91,7 @@ export const Hero: React.FC<HeroProps> = ({ onStartWatching, onSubscribe }) => {
               {/* The extracted high-res hero montage with 4 characters & 3D crown emblem */}
               <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/40">
                 <img
-                  src="/assets/generated/hero-characters.png"
+                  src={getAssetUrl('/assets/generated/hero-characters.png')}
                   alt="MovieDuniya Characters and 3D Crown Emblem"
                   className="w-full h-auto object-cover transform hover:scale-[1.02] transition-transform duration-500"
                 />
